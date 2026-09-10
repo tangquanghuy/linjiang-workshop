@@ -1,0 +1,64 @@
+﻿<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <meta name="color-scheme" content="dark">
+  <title>临江创意工坊</title>
+  <link rel="stylesheet" href="./styles.css">
+</head>
+<body>
+  <div class="ambient ambient-a"></div><div class="ambient ambient-b"></div>
+  <header class="topbar">
+    <div class="brand"><span class="brand-mark">江</span><div><b>临江创意工坊</b><small>主播 · 城市节点 · 拓展</small></div></div>
+    <div class="top-actions">
+      <button id="bridge-state" class="chip" type="button">检测游戏连接</button>
+      <button id="wallet-button" class="chip" type="button">代币 0</button>
+      <button id="login-button" class="primary" type="button">Discord 登录</button>
+    </div>
+  </header>
+
+  <main>
+    <section class="hero panel">
+      <div><span class="eyebrow">LINJIANG COMMUNITY ARCHIVE</span><h1>把你创造的临江，分享给下一位玩家。</h1><p>工坊作品以版本化 JSON 为底层格式。游戏内通过桥接直接投稿与安装，独立页面仍保留 JSON 导入、导出能力。</p></div>
+      <button id="publish-button" class="primary big" type="button">发布作品</button>
+    </section>
+
+    <section class="toolbar panel">
+      <nav id="tabs" class="tabs">
+        <button class="active" data-type="streamer">自定义主播</button>
+        <button data-type="city_node">城市节点</button>
+        <button data-type="extension">拓展</button>
+      </nav>
+      <div class="filters"><input id="search" type="search" placeholder="搜索作品、作者"><select id="sort"><option value="recent">最近更新</option><option value="downloads">采用最多</option><option value="likes">喜欢最多</option></select></div>
+    </section>
+
+    <section id="status" class="status">正在读取工坊……</section>
+    <section id="grid" class="work-grid" aria-live="polite"></section>
+  </main>
+
+  <dialog id="detail-dialog" class="dialog"><div class="dialog-card detail-card"><button class="dialog-x" data-close="detail-dialog">×</button><div id="detail-content"></div></div></dialog>
+  <dialog id="publish-dialog" class="dialog"><form id="publish-form" class="dialog-card publish-card" method="dialog"><button class="dialog-x" type="button" data-close="publish-dialog">×</button>
+    <span class="eyebrow">PUBLISH</span><h2>发布到临江创意工坊</h2>
+    <div class="publish-source"><button id="read-game-source" type="button" class="secondary">从当前游戏读取</button><label class="file-button">导入 JSON<input id="publish-file" type="file" accept="application/json,.json"></label></div>
+    <label>作品类型<select id="publish-type"><option value="streamer">自定义主播</option><option value="city_node">城市节点</option><option value="extension">拓展</option></select></label>
+    <label id="local-source-row" hidden>游戏内内容<select id="local-source"></select></label>
+    <label>标题<input id="publish-title" maxlength="80" required></label>
+    <label>简介<textarea id="publish-summary" maxlength="1000" rows="3"></textarea></label>
+    <label>标签<input id="publish-tags" maxlength="200" placeholder="日常，直播，落霞区"></label>
+    <label>封面网络链接<input id="publish-cover" type="url" placeholder="https://..."></label>
+    <div id="extension-fields" hidden>
+      <label>触发词<input id="extension-triggers" placeholder="逗号分隔"></label>
+      <label>拓展正文<textarea id="extension-content" rows="10" placeholder="写入世界书的正文"></textarea></label>
+    </div>
+    <details><summary>作品包预览</summary><textarea id="publish-json" rows="12" spellcheck="false"></textarea></details>
+    <output id="publish-status"></output>
+    <div class="dialog-actions"><button type="button" class="secondary" data-close="publish-dialog">取消</button><button id="publish-submit" type="submit" class="primary">确认发布</button></div>
+  </form></dialog>
+
+  <dialog id="wallet-dialog" class="dialog"><div class="dialog-card wallet-card"><button class="dialog-x" data-close="wallet-dialog">×</button><span class="eyebrow">CREATOR WALLET</span><h2>创作代币</h2><div class="wallet-numbers"><div><small>云端可领取</small><b id="cloud-balance">0</b></div><div><small>本浏览器</small><b id="local-balance">0</b></div><div><small>累计获得</small><b id="earned-total">0</b></div></div><p>每位已登录玩家首次成功采用一件作品，为作者结算 1 枚代币；作者自己安装与重复安装不计入。</p><button id="claim-button" class="primary big" type="button">领取到本浏览器</button><output id="wallet-status"></output></div></dialog>
+
+  <div id="toast" class="toast" role="status"></div>
+  <script type="module" src="./app.js"></script>
+</body>
+</html>
