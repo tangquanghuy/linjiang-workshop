@@ -3,6 +3,8 @@ const SESSION_KEY = 'linjiang_workshop_session_v1';
 const LOCAL_WALLET_KEY = 'linjiang_workshop_local_tokens_v1';
 const USED_CLAIMS_KEY = 'linjiang_workshop_used_claims_v1';
 const BRIDGE_CHANNEL = 'linjiang-workshop:bridge';
+const WORKSHOP_MODE = new URLSearchParams(location.search).get('mode') || '';
+const SELECT_STREAMER_MODE = WORKSHOP_MODE === 'select-streamer';
 const TYPE_LABEL = { streamer: '自定义主播', city_node: '城市节点', extension: '拓展' };
 
 const state = {
@@ -169,6 +171,18 @@ function worldbookName(item) {
   return '';
 }
 
+function sendSelectionToParent(item) {
+  if (window.parent === window) return false;
+  const target = item?.package || item;
+  window.parent.postMessage({
+    channel: 'linjiang-workshop:select',
+    kind: 'event',
+    type: 'package',
+    package: target,
+  }, '*');
+  return true;
+}
+
 function openDetail(item) {
   state.selected = item;
   const pkg = item.package || {};
@@ -185,6 +199,7 @@ function openDetail(item) {
     <p>${esc(item.summary)}</p>${specifics}
     <div class="tags">${(item.tags || []).map((tag) => `<em>${esc(tag)}</em>`).join('')}</div>
     <div class="detail-actions">
+      ${SELECT_STREAMER_MODE && item.itemType === 'streamer' ? '<button class="primary" data-detail-action="select">选择此主播</button>' : ''}
       <button class="primary" data-detail-action="install">${state.bridge.available ? '安装到当前游戏' : '下载 JSON'}</button>
       <button class="secondary" data-detail-action="download">导出 JSON</button>
       <button class="secondary" data-detail-action="like">${item.liked ? '取消喜欢' : '喜欢'} · ${item.likeCount}</button>
@@ -360,7 +375,16 @@ $('#tabs').addEventListener('click', (event) => {
   state.type = button.dataset.type; syncTabs(); loadItems();
 });
 $('#grid').addEventListener('click', (event) => { const card = event.target.closest('[data-item-id]'); if (card) openDetail(state.items.find((item) => item.id === card.dataset.itemId)); });
-$('#detail-content').addEventListener('click', (event) => { const action = event.target.closest('[data-detail-action]')?.dataset.detailAction; if (action === 'install') installSelected(); if (action === 'download') downloadSelected(); if (action === 'like') toggleLike(); });
+$('#detail-content').addEventListener('click', (event) => {
+  const action = event.target.closest('[data-detail-action]')?.dataset.detailAction;
+  if (action === 'select') {
+    if (state.selected?.itemType !== 'streamer' || !sendSelectionToParent(state.selected)) toast('当前页面未连接开局页'); else { $('#detail-dialog').close(); toast('已发送主播到开局页'); }
+    return;
+  }
+  if (action === 'install') installSelected();
+  if (action === 'download') downloadSelected();
+  if (action === 'like') toggleLike();
+});
 $('#publish-button').addEventListener('click', openPublish);
 $('#login-button').addEventListener('click', () => beginLogin().catch((error) => toast(error.message)));
 $('#wallet-button').addEventListener('click', () => openWallet().catch((error) => toast(error.message)));
