@@ -243,21 +243,32 @@ function openDetail(item) {
   const pkg = item.package || {};
   const data = pkg.data || {};
   const partCount = Object.values(data.assets?.parts || {}).filter(Boolean).length;
+  const profile = item.itemType === 'streamer' ? String(data.profileYaml || data.yaml || '').trim() : '';
   const specifics = item.itemType === 'streamer'
-    ? `<p><b>${esc(data.name)}</b> / ${esc(data.handle)} · 体量档位 ${Number(data.tier || 0)} · 部位图 ${partCount}/4</p><p>世界书：<code>${esc(worldbookName(item))}</code></p>`
+    ? `<p><b>${esc(data.name)}</b> / ${esc(data.handle)} \u00b7 \u4f53\u91cf\u6863\u4f4d ${Number(data.tier || 0)} \u00b7 \u90e8\u4f4d\u56fe ${partCount}/4</p><p>\u4e16\u754c\u4e66\uff1a<code>${esc(worldbookName(item))}</code></p>`
     : item.itemType === 'city_node'
-      ? `<p><b>${esc(data.district)} · ${esc(data.name)}</b> / ${esc(data.archetype)} / 私密度 ${Number(data.privacy || 0)}</p><p>底板 ${esc(data.placement?.plate)} · 锚点 ${esc(data.placement?.anchorName || data.placement?.anchorId || '未设置')}</p>`
-      : `<p>世界书：<code>${esc(worldbookName(item))}</code></p><p>${Number(data.sections?.length || 0)} 个内容区块</p>`;
+      ? `<p><b>${esc(data.district)} \u00b7 ${esc(data.name)}</b> / ${esc(data.archetype)} / \u79c1\u5bc6\u5ea6 ${Number(data.privacy || 0)}</p><p>\u5e95\u677f ${esc(data.placement?.plate)} \u00b7 \u951a\u70b9 ${esc(data.placement?.anchorName || data.placement?.anchorId || '\u672a\u8bbe\u7f6e')}</p>`
+      : `<p>\u4e16\u754c\u4e66\uff1a<code>${esc(worldbookName(item))}</code></p><p>${Number(data.sections?.length || 0)} \u4e2a\u5185\u5bb9\u533a\u5757</p>`;
+  const persona = profile
+    ? `<details class="detail-section persona-section" open><summary><span>\u4eba\u8bbe\u6863\u6848</span><small>WORLD BOOK PROFILE</small></summary><pre>${esc(profile)}</pre></details>`
+    : '';
   $('#detail-content').innerHTML = `
     ${item.coverUrl ? `<img class="detail-cover" src="${esc(item.coverUrl)}" alt="">` : ''}
     <span class="eyebrow">${TYPE_LABEL[item.itemType]}</span><h2>${esc(item.title)}</h2>
-    <p>${esc(item.summary)}</p>${specifics}
+    <p class="detail-summary">${esc(item.summary || '\u4f5c\u8005\u6ca1\u6709\u586b\u5199\u7b80\u4ecb')}</p>
+    <div class="detail-author-row"><span>${esc(item.authorName || '\u533f\u540d\u4f5c\u8005')}</span><span>\u559c\u6b22 ${item.likeCount || 0} \u00b7 \u91c7\u7528 ${item.downloadCount || 0}</span></div>
+    <div class="detail-specifics">${specifics}</div>
+    ${persona}
     <div class="tags">${(item.tags || []).map((tag) => `<em>${esc(tag)}</em>`).join('')}</div>
     <div class="detail-actions">
-      ${SELECT_STREAMER_MODE && item.itemType === 'streamer' ? '<button class="primary" data-detail-action="select">选择此主播</button>' : ''}
-      <button class="primary" data-detail-action="install">${state.bridge.available ? '安装到当前游戏' : '下载 JSON'}</button>
-      <button class="secondary" data-detail-action="download">导出 JSON</button>
-      <button class="secondary" data-detail-action="like">${item.liked ? '取消喜欢' : '喜欢'} · ${item.likeCount}</button>
+      <div class="detail-main-actions">
+        ${SELECT_STREAMER_MODE && item.itemType === 'streamer' ? '<button class="primary" data-detail-action="select">\u9009\u62e9\u6b64\u4e3b\u64ad</button>' : ''}
+        <button class="primary" data-detail-action="install">${state.bridge.available ? '\u5b89\u88c5\u5230\u5f53\u524d\u6e38\u620f' : '\u4e0b\u8f7d JSON'}</button>
+      </div>
+      <div class="detail-utility-actions">
+        <button class="utility-button" data-detail-action="like">\u2661 ${item.liked ? '\u53d6\u6d88\u559c\u6b22' : '\u559c\u6b22'} <b>${item.likeCount || 0}</b></button>
+        <button class="utility-button" data-detail-action="download">\u21e9 \u5bfc\u51fa JSON</button>
+      </div>
     </div>`;
   $('#detail-dialog').showModal();
 }
@@ -452,6 +463,10 @@ $('#publish-form').addEventListener('submit', submitPublish);
 $('#search').addEventListener('input', debounce(loadItems, 250));
 $('#sort').addEventListener('change', loadItems);
 document.addEventListener('click', (event) => { const id = event.target.closest('[data-close]')?.dataset.close; if (id) document.getElementById(id)?.close(); });
+
+document.querySelectorAll('dialog.dialog').forEach((dialog) => dialog.addEventListener('click', (event) => {
+  if (event.target === dialog) dialog.close();
+}));
 
 function debounce(fn, wait) { let timer; return (...args) => { clearTimeout(timer); timer = setTimeout(() => fn(...args), wait); }; }
 
