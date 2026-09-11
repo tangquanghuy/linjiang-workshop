@@ -53,3 +53,9 @@ button,input,select,textarea{font:inherit}[hidden]{display:none!important}button
 .pagination button{min-width:34px;height:34px;padding:0 10px;border:1px solid rgba(255,255,255,.18);border-radius:10px;background:rgba(255,255,255,.07);color:rgba(255,255,255,.72);font-size:12px;cursor:pointer;transition:.2s ease}
 .pagination button:hover:not(:disabled){border-color:rgba(255,190,218,.5);background:rgba(255,255,255,.14);color:#fff}.pagination button.active{border-color:rgba(255,255,255,.72);background:linear-gradient(135deg,#fff2f8,#e6f1ff);color:#3a2740;font-weight:700}.pagination button:disabled{opacity:.35;cursor:not-allowed}.pagination-gap{min-width:24px;text-align:center;color:rgba(255,255,255,.4)}
 @media(max-width:580px){.card-meta{gap:7px}.card-meta small{font-size:9px}.card-stat{display:grid;gap:2px}.detail-metrics{grid-template-columns:1fr 1fr}.detail-metrics>div:first-child{grid-column:1/-1}.pagination{gap:3px}.pagination button{min-width:31px;padding:0 7px}}
+
+/* Pagination information belongs with the pager, not in the archive heading. */
+.pagination-wrap{display:flex;align-items:center;justify-content:space-between;gap:18px;margin-top:22px;min-height:42px}
+.pagination-summary{flex:1;color:rgba(235,237,255,.48);font-size:12px;letter-spacing:.02em}
+.pagination-wrap .pagination{flex:0 0 auto;margin-top:0}
+@media(max-width:580px){.pagination-wrap{align-items:flex-start;flex-direction:column;gap:8px}.pagination-wrap .pagination{width:100%;justify-content:center}.pagination-summary{font-size:11px}}
