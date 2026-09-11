@@ -202,7 +202,7 @@ async function loadItems(page = state.page) {  status.textContent = '\u6b63\u572
       <div class="cover">${item.coverUrl ? `<img src="${esc(item.coverUrl)}" alt="" loading="lazy" data-hide-on-error>` : `<div class="cover-fallback">${item.itemType === 'streamer' ? '\u2662' : item.itemType === 'city_node' ? '\u2316' : '\u2726'}</div>`}<span class="type-badge">${TYPE_LABEL[item.itemType]}</span></div>
       <div class="card-body"><h3>${esc(item.title)}</h3><p>${esc(item.summary || '\u4f5c\u8005\u6ca1\u6709\u586b\u5199\u7b80\u4ecb')}</p>
       <div class="tags">${(item.tags || []).map((tag) => `<em>${esc(tag)}</em>`).join('')}</div>
-      <div class="card-meta"><span class="card-author"><small>\u4f5c\u8005</small><b>${esc(item.authorName || '\u533f\u540d\u4f5c\u8005')}</b></span><span class="card-stat"><small>\u559c\u6b22</small><b>${item.likeCount || 0}</b></span><span class="card-stat"><small>\u91c7\u7528</small><b>${item.downloadCount || 0}</b></span></div></div>
+      <div class="card-meta"><span class="card-author"><i class="meta-icon author-icon" aria-hidden="true">\u270e</i><b>${esc(item.authorName || '\u533f\u540d\u4f5c\u8005')}</b></span><span class="card-stat like-stat"><i class="meta-icon" aria-hidden="true">${item.liked ? '\u2665' : '\u2661'}</i><b>${item.likeCount || 0}</b></span><span class="card-stat adopt-stat"><i class="meta-icon" aria-hidden="true">\u21e9</i><b>${item.downloadCount || 0}</b></span></div></div>
     </article>`).join('');
   grid.querySelectorAll('[data-hide-on-error]').forEach((image) => image.addEventListener('error', () => image.remove()));
 }
@@ -246,13 +246,13 @@ function openDetail(item) {
       ? `<p><b>${esc(data.district)} \u00b7 ${esc(data.name)}</b> / ${esc(data.archetype)} / \u79c1\u5bc6\u5ea6 ${Number(data.privacy || 0)}</p><p>\u5e95\u677f ${esc(data.placement?.plate)} \u00b7 \u951a\u70b9 ${esc(data.placement?.anchorName || data.placement?.anchorId || '\u672a\u8bbe\u7f6e')}</p>`
       : `<p>${Number(data.sections?.length || 0)} \u4e2a\u5185\u5bb9\u533a\u5757</p>`;
   const persona = profile
-    ? `<details class="detail-section persona-section" open><summary><span>\u4eba\u8bbe\u6863\u6848</span><small>WORLD BOOK PROFILE</small></summary><pre>${esc(profile)}</pre></details>`
+    ? `<details class="detail-section persona-section" open><summary><span>\u4eba\u8bbe\u6863\u6848</span><small>\u5c55\u5f00</small></summary><pre>${esc(profile)}</pre></details>`
     : '';
   $('#detail-content').innerHTML = `
     ${item.coverUrl ? `<img class="detail-cover" src="${esc(item.coverUrl)}" alt="">` : ''}
     <span class="eyebrow">${TYPE_LABEL[item.itemType]}</span><h2>${esc(item.title)}</h2>
     <p class="detail-summary">${esc(item.summary || '\u4f5c\u8005\u6ca1\u6709\u586b\u5199\u7b80\u4ecb')}</p>
-    <div class="detail-metrics"><div><small>\u4f5c\u8005</small><b>${esc(item.authorName || '\u533f\u540d\u4f5c\u8005')}</b></div><div><small>\u559c\u6b22</small><b>${item.likeCount || 0}</b></div><div><small>\u91c7\u7528</small><b>${item.downloadCount || 0}</b></div></div>
+    <div class="detail-metrics"><div class="metric metric-author"><i class="metric-icon author-icon" aria-hidden="true">\u270e</i><span><small>\u4f5c\u8005</small><b>${esc(item.authorName || '\u533f\u540d\u4f5c\u8005')}</b></span></div><div class="metric metric-like"><i class="metric-icon" aria-hidden="true">${item.liked ? '\u2665' : '\u2661'}</i><span><small>\u559c\u6b22</small><b>${item.likeCount || 0}</b></span></div><div class="metric metric-adopt"><i class="metric-icon" aria-hidden="true">\u21e9</i><span><small>\u91c7\u7528</small><b>${item.downloadCount || 0}</b></span></div></div>
     <div class="detail-specifics">${specifics}</div>
     ${persona}
     <div class="tags">${(item.tags || []).map((tag) => `<em>${esc(tag)}</em>`).join('')}</div>
@@ -262,7 +262,7 @@ function openDetail(item) {
         <button class="primary" data-detail-action="install">${state.bridge.available ? '\u5b89\u88c5\u5230\u5f53\u524d\u6e38\u620f' : '\u4e0b\u8f7d JSON'}</button>
       </div>
       <div class="detail-utility-actions">
-        <button class="utility-button" data-detail-action="like">\u2661 ${item.liked ? '\u53d6\u6d88\u559c\u6b22' : '\u559c\u6b22'} <b>${item.likeCount || 0}</b></button>
+        <button class="utility-button like-button ${item.liked ? 'is-liked' : ''}" data-detail-action="like" aria-pressed="${item.liked ? 'true' : 'false'}"><span class="like-icon" aria-hidden="true">${item.liked ? '\u2665' : '\u2661'}</span><span>${item.liked ? '\u53d6\u6d88\u559c\u6b22' : '\u559c\u6b22'}</span><b>${item.likeCount || 0}</b></button>
         <button class="utility-button" data-detail-action="download">\u21e9 \u5bfc\u51fa JSON</button>
       </div>
     </div>`;
