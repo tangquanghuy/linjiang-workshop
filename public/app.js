@@ -111,24 +111,55 @@ function clearSession() {
   localStorage.removeItem(SESSION_KEY);
 }
 
+function oauthStateFromUrl(authorizeUrl) {
+  try { return new URL(authorizeUrl).searchParams.get('state') || ''; } catch { return ''; }
+}
+
+function waitForAuthResult(authorizeUrl, requestId = '') {
+  const oauthState = oauthStateFromUrl(authorizeUrl);
+  return new Promise((resolve, reject) => {
+    let settled = false;
+    let timer = 0;
+    let pollTimer = 0;
+    const finish = (error, data) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(timer);
+      clearTimeout(pollTimer);
+      window.removeEventListener('message', onMessage);
+      error ? reject(error) : resolve(data);
+    };
+    const onMessage = (event) => {
+      const data = event.data;
+      if (!data || data.channel !== 'linjiang-workshop:auth' || event.origin !== location.origin) return;
+      if (requestId && data.requestId !== requestId) return;
+      if (!requestId && data.oauthState && data.oauthState !== oauthState) return;
+      if (data.kind && data.kind !== 'response' && data.kind !== 'error') return;
+      if (data.ok === false) finish(new Error(data.error || 'Discord ????'));
+      else if (data.ok === true && data.sessionToken) finish(null, data);
+    };
+    const poll = async () => {
+      if (settled || !oauthState) return;
+      try {
+        const response = await fetch(`${API}/auth/discord/poll?state=${encodeURIComponent(oauthState)}`);
+        const data = await response.json().catch(() => ({}));
+        if (data.result) return finish(data.result.ok === false ? new Error(data.result.error || 'Discord ????') : null, data.result);
+      } catch {}
+      if (!settled) pollTimer = setTimeout(poll, 700);
+    };
+    window.addEventListener('message', onMessage);
+    timer = setTimeout(() => finish(new Error('????????')), 120000);
+    poll();
+  });
+}
+
 function requestHostLogin(authorizeUrl) {
   return new Promise((resolve, reject) => {
     const requestId = `ljw-auth-${Date.now()}-${Math.random().toString(36).slice(2)}`;
-    const timer = setTimeout(() => {
-      window.removeEventListener('message', onMessage);
-      reject(new Error('登录窗口响应超时'));
-    }, 120000);
-    const onMessage = (event) => {
-      const data = event.data;
-      if (!data || data.channel !== 'linjiang-workshop:auth' || data.requestId !== requestId) return;
-      if (data.kind !== 'response' && data.kind !== 'error') return;
-      clearTimeout(timer);
-      window.removeEventListener('message', onMessage);
-      data.ok ? resolve(data) : reject(new Error(data.error || 'Discord 登录失败'));
-    };
-    window.addEventListener('message', onMessage);
+    const wait = waitForAuthResult(authorizeUrl, requestId);
     const target = window.top || window.parent;
     target.postMessage({ channel: 'linjiang-workshop:auth', kind: 'request', action: 'openDiscordLogin', url: authorizeUrl, requestId }, '*');
+    wait.then(resolve, reject);
   });
 }
 
@@ -146,17 +177,6 @@ async function beginLogin() {
   }
   toast('请在新窗口完成 Discord 登录');
 }
-window.addEventListener('message', async (event) => {
-  const data = event.data;
-  if (!data || data.channel !== 'linjiang-workshop:auth') return;
-  if (event.origin !== location.origin) return;
-  if (!data.ok) return toast(data.error || '登录遇到问题');
-  state.session = { token: data.sessionToken, expiresAt: data.expiresAt };
-  saveJson(SESSION_KEY, state.session);
-  await refreshAuth();
-  await loadItems();
-  toast(`欢迎，${state.user?.username || '创作者'}`);
-});
 
 async function loadItems() {
   status.textContent = '正在读取工坊……';

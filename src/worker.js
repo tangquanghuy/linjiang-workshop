@@ -1,4 +1,4 @@
-﻿import { ITEM_TYPES, normalizePackage } from './contracts.js';
+import { ITEM_TYPES, normalizePackage } from './contracts.js';
 
 const JSON_HEADERS = { 'content-type': 'application/json; charset=utf-8' };
 const SESSION_DAYS = 30;
@@ -19,6 +19,7 @@ export default {
       }
       if (url.pathname === '/api/auth/discord/start' && request.method === 'POST') return startDiscordAuth(request, env);
       if (url.pathname === '/api/auth/discord/callback' && request.method === 'GET') return finishDiscordAuth(request, env);
+      if (url.pathname === '/api/auth/discord/poll' && request.method === 'GET') return pollDiscordAuth(request, env);
       if (url.pathname === '/api/auth/me' && request.method === 'GET') return authMe(request, env);
       if (url.pathname === '/api/auth/logout' && request.method === 'POST') return logout(request, env);
 
@@ -74,7 +75,10 @@ async function finishDiscordAuth(request, env) {
   const code = readText(url.searchParams.get('code'));
   const state = readText(url.searchParams.get('state'));
   const row = state ? await env.DB.prepare('SELECT * FROM oauth_states WHERE state = ? LIMIT 1').bind(state).first() : null;
-  if (!code || !row || Date.parse(row.expires_at) <= Date.now()) return authPopupHtml({ ok: false, error: '登录状态已过期' }, safeOrigin(row?.return_origin) || url.origin);
+  if (!code || !row || Date.parse(row.expires_at) <= Date.now()) {
+    if (state) await saveOAuthResult(env, state, { ok: false, error: '???????', oauthState: state });
+    return authPopupHtml({ ok: false, error: '???????', oauthState: state }, safeOrigin(row?.return_origin) || url.origin);
+  }
   await env.DB.prepare('DELETE FROM oauth_states WHERE state = ?').bind(state).run();
 
   const redirectUri = `${url.origin}/api/auth/discord/callback`;
@@ -89,12 +93,20 @@ async function finishDiscordAuth(request, env) {
       redirect_uri: redirectUri,
     }),
   });
-  if (!tokenResponse.ok) return authPopupHtml({ ok: false, error: `Discord token ${tokenResponse.status}` }, row.return_origin);
+  if (!tokenResponse.ok) {
+    const result = { ok: false, error: `Discord token ${tokenResponse.status}`, oauthState: state };
+    await saveOAuthResult(env, state, result);
+    return authPopupHtml(result, row.return_origin);
+  }
   const tokenData = await tokenResponse.json();
   const identityResponse = await fetch('https://discord.com/api/v10/users/@me', {
     headers: { authorization: `Bearer ${tokenData.access_token}` },
   });
-  if (!identityResponse.ok) return authPopupHtml({ ok: false, error: `Discord identity ${identityResponse.status}` }, row.return_origin);
+  if (!identityResponse.ok) {
+    const result = { ok: false, error: `Discord identity ${identityResponse.status}`, oauthState: state };
+    await saveOAuthResult(env, state, result);
+    return authPopupHtml(result, row.return_origin);
+  }
   const identity = await identityResponse.json();
   const username = readText(identity.global_name || identity.username, 80) || 'Discord 用户';
   const avatarUrl = identity.avatar
@@ -113,12 +125,30 @@ async function finishDiscordAuth(request, env) {
     env.DB.prepare('DELETE FROM auth_sessions WHERE discord_id = ? OR datetime(expires_at) <= CURRENT_TIMESTAMP').bind(identity.id),
     env.DB.prepare('INSERT INTO auth_sessions (token_hash, discord_id, expires_at) VALUES (?, ?, ?)').bind(tokenHash, identity.id, expiresAt),
   ]);
-  return authPopupHtml({
+  const result = {
     ok: true,
+    oauthState: state,
     sessionToken,
     expiresAt,
     user: { id: identity.id, username, avatarUrl },
-  }, row.return_origin);
+  };
+  await saveOAuthResult(env, state, result);
+  return authPopupHtml(result, row.return_origin);
+}
+
+
+async function pollDiscordAuth(request, env) {
+  const state = readText(new URL(request.url).searchParams.get('state'), 120);
+  if (!state) return json({ ok: true, pending: false, result: null });
+  const row = await env.DB.prepare('SELECT payload_json, expires_at FROM oauth_results WHERE state = ? LIMIT 1').bind(state).first();
+  if (!row) return json({ ok: true, pending: true, result: null });
+  if (Date.parse(row.expires_at) <= Date.now()) {
+    await env.DB.prepare('DELETE FROM oauth_results WHERE state = ?').bind(state).run();
+    return json({ ok: true, pending: false, result: null });
+  }
+  await env.DB.prepare('DELETE FROM oauth_results WHERE state = ?').bind(state).run();
+  try { return json({ ok: true, pending: false, result: JSON.parse(row.payload_json) }); }
+  catch { return json({ ok: false, error: 'OAuth ??????' }, 500); }
 }
 
 async function authMe(request, env) {
@@ -395,12 +425,23 @@ function bearerToken(request) {
   return match ? match[1].trim() : '';
 }
 
+
+async function saveOAuthResult(env, state, payload) {
+  if (!state) return;
+  const expiresAt = new Date(Date.now() + 5 * 60 * 1000).toISOString();
+  await env.DB.prepare(`
+    INSERT INTO oauth_results (state, payload_json, expires_at)
+    VALUES (?, ?, ?)
+    ON CONFLICT(state) DO UPDATE SET payload_json = excluded.payload_json, expires_at = excluded.expires_at
+  `).bind(state, JSON.stringify(payload), expiresAt).run();
+}
+
 function authPopupHtml(payload, targetOrigin) {
   const safePayload = JSON.stringify({ channel: 'linjiang-workshop:auth', ...payload }).replace(/</g, '\\u003c');
   // The OAuth popup may be opened by the Tavern host for a nested workshop iframe.
   // Receivers validate source and origin before forwarding the session payload.
   const safeTarget = JSON.stringify('*');
-  return new Response(`<!doctype html><meta charset="utf-8"><title>临江创意工坊登录</title><style>body{font-family:system-ui;background:#0b1020;color:#eef3ff;display:grid;place-items:center;min-height:100vh;margin:0}main{padding:28px;border:1px solid #34405f;border-radius:18px;background:#151c31}small{color:#aab5d0}</style><main><b>${payload.ok ? '登录完成' : '登录遇到问题'}</b><br><small>${escapeHtml(payload.error || '窗口将自动关闭')}</small></main><script>if(window.opener){window.opener.postMessage(${safePayload},${safeTarget});setTimeout(()=>window.close(),180)}<\/script>`, {
+  return new Response(`<!doctype html><meta charset="utf-8"><title>临江创意工坊登录</title><style>body{font-family:system-ui;background:#0b1020;color:#eef3ff;display:grid;place-items:center;min-height:100vh;margin:0}main{padding:28px;border:1px solid #34405f;border-radius:18px;background:#151c31}small{color:#aab5d0}</style><main><b>${payload.ok ? '登录完成' : '登录遇到问题'}</b><br><small>${escapeHtml(payload.error || '窗口将自动关闭')}</small></main><script>try{if(window.opener)window.opener.postMessage(${safePayload},${safeTarget})}catch(_){}setTimeout(()=>window.close(),180)<\/script>`, {
     headers: { 'content-type': 'text/html; charset=utf-8' },
   });
 }

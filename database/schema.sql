@@ -1,4 +1,4 @@
-﻿PRAGMA foreign_keys = ON;
+PRAGMA foreign_keys = ON;
 
 CREATE TABLE IF NOT EXISTS users (
   discord_id TEXT PRIMARY KEY,
@@ -23,6 +23,13 @@ CREATE TABLE IF NOT EXISTS auth_sessions (
   expires_at TEXT NOT NULL,
   created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
   FOREIGN KEY (discord_id) REFERENCES users(discord_id) ON DELETE CASCADE
+);
+
+CREATE TABLE IF NOT EXISTS oauth_results (
+  state TEXT PRIMARY KEY,
+  payload_json TEXT NOT NULL,
+  expires_at TEXT NOT NULL,
+  created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
 CREATE TABLE IF NOT EXISTS workshop_items (

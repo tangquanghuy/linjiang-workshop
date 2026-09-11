@@ -1,0 +1,6 @@
+CREATE TABLE IF NOT EXISTS oauth_results (
+  state TEXT PRIMARY KEY,
+  payload_json TEXT NOT NULL,
+  expires_at TEXT NOT NULL,
+  created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
