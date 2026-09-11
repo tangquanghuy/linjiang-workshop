@@ -23,7 +23,13 @@ const state = {
 };
 
 const $ = (selector) => document.querySelector(selector);
-const esc = (value) => String(value ?? '').replace(/[&<>"']/g, (char) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[char]);
+const esc = (value) => String(value ?? '').replace(/[&<>\"']/g, (char) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[char]);
+const CITY_ARCHETYPE_LABEL = Object.freeze({
+  living: '\u751f\u6d3b', residential: '\u5c45\u4f4f', commercial: '\u5546\u4e1a', entertainment: '\u5a31\u4e50',
+  public: '\u516c\u5171', service: '\u670d\u52a1', adult: '\u6210\u4eba\u5411', private: '\u79c1\u5bc6',
+});
+const cityArchetypeLabel = (value) => CITY_ARCHETYPE_LABEL[String(value || '').trim().toLowerCase()] || String(value || '').trim();
+const renderTags = (item) => (item.tags || []).map((tag) => `<em>${esc(item.itemType === 'city_node' ? cityArchetypeLabel(tag) : tag)}</em>`).join('');
 const status = $('#status');
 let toastTimer = 0;
 
@@ -201,7 +207,7 @@ async function loadItems(page = state.page) {  status.textContent = '\u6b63\u572
     <article class="work-card" data-item-id="${esc(item.id)}">
       <div class="cover">${item.coverUrl ? `<img src="${esc(item.coverUrl)}" alt="" loading="lazy" data-hide-on-error>` : `<div class="cover-fallback">${item.itemType === 'streamer' ? '\u2662' : item.itemType === 'city_node' ? '\u2316' : '\u2726'}</div>`}<span class="type-badge">${TYPE_LABEL[item.itemType]}</span></div>
       <div class="card-body"><h3>${esc(item.title)}</h3><p>${esc(item.summary || '\u4f5c\u8005\u6ca1\u6709\u586b\u5199\u7b80\u4ecb')}</p>
-      <div class="tags">${(item.tags || []).map((tag) => `<em>${esc(tag)}</em>`).join('')}</div>
+      <div class="tags">${renderTags(item)}</div>
       <div class="card-meta"><span class="card-author"><i class="meta-icon author-icon" aria-hidden="true">\u270e</i><b>${esc(item.authorName || '\u533f\u540d\u4f5c\u8005')}</b></span><span class="card-stat like-stat"><i class="meta-icon" aria-hidden="true">${item.liked ? '\u2665' : '\u2661'}</i><b>${item.likeCount || 0}</b></span><span class="card-stat adopt-stat"><i class="meta-icon" aria-hidden="true">\u21e9</i><b>${item.downloadCount || 0}</b></span></div></div>
     </article>`).join('');
   grid.querySelectorAll('[data-hide-on-error]').forEach((image) => image.addEventListener('error', () => image.remove()));
@@ -243,7 +249,7 @@ function openDetail(item) {
   const specifics = item.itemType === 'streamer'
     ? (data.handle && data.handle !== data.name ? `<p>\u4e3b\u64ad\u7f51\u540d \u00b7 ${esc(data.handle)}</p>` : '')
     : item.itemType === 'city_node'
-      ? `<p><b>${esc(data.district)} \u00b7 ${esc(data.name)}</b> / ${esc(data.archetype)} / \u79c1\u5bc6\u5ea6 ${Number(data.privacy || 0)}</p><p>\u5e95\u677f ${esc(data.placement?.plate)} \u00b7 \u951a\u70b9 ${esc(data.placement?.anchorName || data.placement?.anchorId || '\u672a\u8bbe\u7f6e')}</p>`
+      ? `<div class="node-facts"><p><small>\u4f4d\u7f6e</small><b>${esc(data.district)} \u00b7 ${esc(data.name)}</b></p><p><small>\u7c7b\u578b</small><b>${esc(cityArchetypeLabel(data.archetype))}</b></p><p><small>\u79c1\u5bc6\u5ea6</small><b>${Number(data.privacy || 0)} / 5</b></p><p><small>\u63a5\u9a73</small><b>${esc(data.placement?.anchorName || data.placement?.anchorId || '\u672a\u8bbe\u7f6e')} \u00b7 ${Number(data.placement?.accessKm || 0)} km</b></p></div>`
       : `<p>${Number(data.sections?.length || 0)} \u4e2a\u5185\u5bb9\u533a\u5757</p>`;
   const persona = profile
     ? `<details class="detail-section persona-section" open><summary><span>\u4eba\u8bbe\u6863\u6848</span><small>\u5c55\u5f00</small></summary><pre>${esc(profile)}</pre></details>`
@@ -255,7 +261,7 @@ function openDetail(item) {
     <div class="detail-metrics"><div class="metric metric-author"><i class="metric-icon author-icon" aria-hidden="true">\u270e</i><span><small>\u4f5c\u8005</small><b>${esc(item.authorName || '\u533f\u540d\u4f5c\u8005')}</b></span></div><div class="metric metric-like"><i class="metric-icon" aria-hidden="true">${item.liked ? '\u2665' : '\u2661'}</i><span><small>\u559c\u6b22</small><b>${item.likeCount || 0}</b></span></div><div class="metric metric-adopt"><i class="metric-icon" aria-hidden="true">\u21e9</i><span><small>\u91c7\u7528</small><b>${item.downloadCount || 0}</b></span></div></div>
     <div class="detail-specifics">${specifics}</div>
     ${persona}
-    <div class="tags">${(item.tags || []).map((tag) => `<em>${esc(tag)}</em>`).join('')}</div>
+    <div class="tags">${renderTags(item)}</div>
     <div class="detail-actions">
       <div class="detail-main-actions">
         ${SELECT_STREAMER_MODE && item.itemType === 'streamer' ? '<button class="primary" data-detail-action="select">\u9009\u62e9\u6b64\u4e3b\u64ad</button>' : ''}
