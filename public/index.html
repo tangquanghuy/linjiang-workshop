@@ -48,9 +48,9 @@
   <dialog id="detail-dialog" class="dialog"><div class="dialog-card detail-card"><button class="dialog-x" data-close="detail-dialog">×</button><div id="detail-content"></div></div></dialog>
   <dialog id="publish-dialog" class="dialog"><form id="publish-form" class="dialog-card publish-card" method="dialog"><button class="dialog-x" type="button" data-close="publish-dialog">×</button>
     <span class="eyebrow">PUBLISH</span><h2>发布到临江创意工坊</h2>
-    <div class="publish-source"><button id="read-game-source" type="button" class="secondary">从当前游戏读取</button><label class="file-button">导入 JSON<input id="publish-file" type="file" accept="application/json,.json"></label></div>
+    <div class="publish-source"><button id="read-game-source" type="button" class="secondary">读取当前游戏</button><label class="file-button">导入 JSON<input id="publish-file" type="file" accept="application/json,.json"></label></div>
     <label>作品类型<select id="publish-type"><option value="streamer">自定义主播</option><option value="city_node">城市节点</option><option value="extension">拓展</option></select></label>
-    <label id="local-source-row" hidden>游戏内内容<select id="local-source"></select></label>
+    <label id="local-source-row" hidden>选择要发布的内容<select id="local-source"></select></label>
     <label>标题<input id="publish-title" maxlength="80" required></label>
     <label>简介<textarea id="publish-summary" maxlength="1000" rows="3"></textarea></label>
     <label>标签<input id="publish-tags" maxlength="200" placeholder="日常，直播，落霞区"></label>
@@ -65,4 +65,5 @@
   <script type="module" src="./app.js"></script>
 </body>
 </html>
+
 
