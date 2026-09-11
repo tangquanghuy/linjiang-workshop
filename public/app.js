@@ -65,7 +65,9 @@ function bridgeRequest(action, payload = {}, timeout = 8000) {
       data.ok ? resolve(data.payload) : reject(new Error(data.error || '游戏桥接执行失败'));
     };
     window.addEventListener('message', onMessage);
-    const target = window.top || window.parent;
+    const useOpeningBridge = SELECT_STREAMER_MODE && window.parent !== window
+      && (action === 'listPublishSources' || action === 'exportPublishSource');
+    const target = useOpeningBridge ? window.parent : (window.top || window.parent);
     target.postMessage({ channel: BRIDGE_CHANNEL, kind: 'request', id, action, payload }, '*');
   });
 }
