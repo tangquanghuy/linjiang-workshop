@@ -166,16 +166,23 @@ function requestHostLogin(authorizeUrl) {
 async function beginLogin() {
   if (state.user) {
     await api('/auth/logout', { method: 'POST' }).catch(() => {});
-    clearSession(); paintAuth(); toast('已退出登录'); return;
+    clearSession(); paintAuth(); toast('?????'); return;
   }
   const data = await api('/auth/discord/start', { method: 'POST', body: { returnOrigin: location.origin } });
+  let result;
   if (window.parent !== window && state.bridge.available) {
-    await requestHostLogin(data.authorizeUrl);
+    result = await requestHostLogin(data.authorizeUrl);
   } else {
+    const wait = waitForAuthResult(data.authorizeUrl);
     const popup = window.open(data.authorizeUrl, 'linjiang_workshop_discord', 'width=620,height=820,scrollbars=yes,resizable=yes');
-    if (!popup) throw new Error('请允许弹出窗口以完成 Discord 登录');
+    if (!popup) throw new Error('?????????? Discord ??');
+    result = await wait;
   }
-  toast('请在新窗口完成 Discord 登录');
+  state.session = { token: result.sessionToken, expiresAt: result.expiresAt };
+  saveJson(SESSION_KEY, state.session);
+  await refreshAuth();
+  await loadItems();
+  toast(`???${state.user?.username || result.user?.username || '???'}`);
 }
 
 async function loadItems() {
@@ -448,5 +455,3 @@ function debounce(fn, wait) { let timer; return (...args) => { clearTimeout(time
 
 await Promise.all([detectBridge(), refreshAuth()]);
 await loadItems();
-
-
