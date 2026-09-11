@@ -16,6 +16,7 @@ const state = {
   bridge: { available: false, capabilities: {} },
   publishPackage: null,
   gameSources: [],
+  extensionSections: [],
   page: 1,
   pageSize: 12,
   total: 0,
@@ -47,6 +48,92 @@ function loadJson(key, fallback) {
 
 function saveJson(key, value) {
   localStorage.setItem(key, JSON.stringify(value));
+}
+
+let extensionSectionSequence = 0;
+
+function createExtensionSection(kind = 'content', value = {}) {
+  const normalizedKind = kind === 'overview' ? 'overview' : 'content';
+  const triggerWords = Array.isArray(value.triggerWords)
+    ? value.triggerWords.map((item) => String(item ?? '').trim()).filter(Boolean)
+    : String(value.triggerWords ?? value.trigger_words ?? '').split(/[,，\n]/).map((item) => item.trim()).filter(Boolean);
+  return {
+    id: String(value.id || '').trim() || `extension-section-${Date.now()}-${++extensionSectionSequence}`,
+    kind: normalizedKind,
+    title: String(value.title || '').trim(),
+    content: String(value.content ?? value.contentText ?? value.content_text ?? '').trim(),
+    triggerWords: normalizedKind === 'content' ? (triggerWords.length ? triggerWords : ['']) : [],
+  };
+}
+
+function normalizeExtensionSections(value, ensureDefault = false) {
+  const source = Array.isArray(value) ? value : [];
+  const sections = source.map((item) => createExtensionSection(item?.kind, item)).filter((item) => item.content || item.title || item.triggerWords.some(Boolean));
+  if (!sections.length && ensureDefault) {
+    return [createExtensionSection('overview'), createExtensionSection('content')];
+  }
+  return sections;
+}
+
+function renderExtensionSections() {
+  const container = $('#extension-sections');
+  if (!container) return;
+  let blueCount = 0;
+  let greenCount = 0;
+  if (!state.extensionSections.length) {
+    container.innerHTML = '<div class="extension-empty">还没有条目，请添加蓝灯或绿灯条目。</div>';
+    return;
+  }
+  container.innerHTML = `<div class="extension-section-list">${state.extensionSections.map((section, index) => {
+    const isBlue = section.kind === 'overview';
+    const number = isBlue ? ++blueCount : ++greenCount;
+    const label = isBlue ? `蓝灯条目 ${number}` : `绿灯条目 ${number}`;
+    const icon = isBlue ? '✦' : '⚡';
+    const triggers = isBlue ? '' : `<div class="extension-trigger-list"><small>触发词（绿灯条目至少填写 1 个）</small>${(section.triggerWords.length ? section.triggerWords : ['']).map((word, wordIndex) => `<div class="extension-trigger-row"><input data-extension-field="trigger" data-index="${index}" data-word-index="${wordIndex}" value="${esc(word)}" placeholder="触发词 ${wordIndex + 1}"><button type="button" class="secondary" data-extension-action="remove-trigger" data-index="${index}" data-word-index="${wordIndex}" aria-label="删除触发词">×</button></div>`).join('')}<div class="extension-trigger-actions"><button type="button" class="secondary" data-extension-action="add-trigger" data-index="${index}">＋ 添加触发词</button></div></div>`;
+    return `<article class="extension-section-card ${isBlue ? 'is-blue' : 'is-green'}" data-extension-index="${index}"><div class="extension-section-top"><span class="extension-light-badge ${isBlue ? 'blue' : 'green'}">${icon} ${label}</span><div class="extension-section-actions"><button type="button" class="secondary" data-extension-action="move-up" data-index="${index}" aria-label="上移">↑</button><button type="button" class="secondary" data-extension-action="move-down" data-index="${index}" aria-label="下移">↓</button><button type="button" class="secondary" data-extension-action="remove" data-index="${index}" aria-label="删除条目">×</button></div></div><input data-extension-field="title" data-index="${index}" value="${esc(section.title)}" placeholder="条目标题（可选，用于识别这条世界书内容）"><textarea data-extension-field="content" data-index="${index}" rows="7" placeholder="${isBlue ? '填写常驻蓝灯内容' : '填写按触发词激活的绿灯内容'}">${esc(section.content)}</textarea>${triggers}</article>`;
+  }).join('')}</div>`;
+  container.querySelectorAll('[data-extension-field]').forEach((field) => field.addEventListener('input', () => {
+    const index = Number(field.dataset.index);
+    const section = state.extensionSections[index];
+    if (!section) return;
+    if (field.dataset.extensionField === 'trigger') {
+      section.triggerWords[Number(field.dataset.wordIndex)] = field.value;
+    } else {
+      section[field.dataset.extensionField] = field.value;
+    }
+  }));
+}
+
+function addExtensionSection(kind) {
+  state.extensionSections.push(createExtensionSection(kind));
+  renderExtensionSections();
+}
+
+function moveExtensionSection(index, direction) {
+  const next = index + direction;
+  if (next < 0 || next >= state.extensionSections.length) return;
+  [state.extensionSections[index], state.extensionSections[next]] = [state.extensionSections[next], state.extensionSections[index]];
+  renderExtensionSections();
+}
+
+function removeExtensionSection(index) {
+  state.extensionSections.splice(index, 1);
+  renderExtensionSections();
+}
+
+function addExtensionTrigger(index) {
+  const section = state.extensionSections[index];
+  if (!section || section.kind !== 'content') return;
+  section.triggerWords = [...(section.triggerWords || []), ''];
+  renderExtensionSections();
+}
+
+function removeExtensionTrigger(index, wordIndex) {
+  const section = state.extensionSections[index];
+  if (!section || section.kind !== 'content') return;
+  section.triggerWords = section.triggerWords.filter((_, currentIndex) => currentIndex !== wordIndex);
+  if (!section.triggerWords.length) section.triggerWords = [''];
+  renderExtensionSections();
 }
 
 async function api(path, options = {}) {
@@ -241,35 +328,79 @@ function sendSelectionToParent(item) {
   return true;
 }
 
+function extensionDetailMarkup(item) {
+  const sections = normalizeExtensionSections(item?.package?.data?.sections || item?.package?.data?.contentSections || []);
+  if (!sections.length) return '<p class="extension-detail-empty">这组拓展还没有可展示的世界书条目。</p>';
+  let blue = 0;
+  let green = 0;
+  return `<div class="extension-detail-list">${sections.map((section) => {
+    const isBlue = section.kind === 'overview';
+    const number = isBlue ? ++blue : ++green;
+    const label = isBlue ? `蓝灯条目 ${number}` : `绿灯条目 ${number}`;
+    const triggerMarkup = isBlue ? '' : `<div class="extension-detail-triggers"><small>触发词</small>${section.triggerWords.map((word) => `<em>${esc(word)}</em>`).join('')}</div>`;
+    return `<article class="extension-detail-entry ${isBlue ? 'is-blue' : 'is-green'}"><header><span class="extension-light-badge ${isBlue ? 'blue' : 'green'}">${isBlue ? '✦' : '⚡'} ${label}</span>${section.title ? `<b>${esc(section.title)}</b>` : ''}</header><div class="extension-detail-content">${esc(section.content)}</div>${triggerMarkup}</article>`;
+  }).join('')}</div>`;
+}
+
+async function selectStreamerToOpening() {
+  const item = state.selected;
+  if (!item || item.itemType !== 'streamer') return;
+  if (!state.user) { await beginLogin(); return; }
+  if (!sendSelectionToParent(item)) {
+    toast('当前页面未连接开局页');
+    return;
+  }
+  let install = null;
+  try {
+    install = await api(`/items/${encodeURIComponent(item.id)}/install`, { method: 'POST', body: { result: { mode: 'opening-selection' } } });
+  } catch (error) {
+    console.warn('[临江工坊] 记录主播采用失败', error);
+  }
+  const reason = install?.counted
+    ? '采用量已增加 1'
+    : install?.reason === 'self_install'
+      ? '作者自己应用，不计入采用量'
+      : install?.reason === 'already_installed'
+        ? '这个账号已经采用过，不重复计数'
+        : '已发送到开局页';
+  $('#detail-dialog').close();
+  toast(`已发送主播到开局页 · ${reason}`);
+}
+
 function openDetail(item) {
   state.selected = item;
   const pkg = item.package || {};
   const data = pkg.data || {};
   const profile = item.itemType === 'streamer' ? String(data.profileYaml || data.yaml || '').trim() : '';
+  const extensionSections = item.itemType === 'extension' ? normalizeExtensionSections(data.sections || []) : [];
   const specifics = item.itemType === 'streamer'
-    ? (data.handle && data.handle !== data.name ? `<p>\u4e3b\u64ad\u7f51\u540d \u00b7 ${esc(data.handle)}</p>` : '')
+    ? (data.handle && data.handle !== data.name ? `<p>主播网名 · ${esc(data.handle)}</p>` : '')
     : item.itemType === 'city_node'
-      ? `<div class="node-facts"><p><small>\u4f4d\u7f6e</small><b>${esc(data.district)} \u00b7 ${esc(data.name)}</b></p><p><small>\u7c7b\u578b</small><b>${esc(cityArchetypeLabel(data.archetype))}</b></p><p><small>\u79c1\u5bc6\u5ea6</small><b>${Number(data.privacy || 0)} / 5</b></p><p><small>\u63a5\u9a73</small><b>${esc(data.placement?.anchorName || data.placement?.anchorId || '\u672a\u8bbe\u7f6e')} \u00b7 ${Number(data.placement?.accessKm || 0)} km</b></p></div>`
-      : `<p>${Number(data.sections?.length || 0)} \u4e2a\u5185\u5bb9\u533a\u5757</p>`;
+      ? `<div class="node-facts"><p><small>位置</small><b>${esc(data.district)} · ${esc(data.name)}</b></p><p><small>类型</small><b>${esc(cityArchetypeLabel(data.archetype))}</b></p><p><small>私密度</small><b>${Number(data.privacy || 0)} / 5</b></p><p><small>接驳</small><b>${esc(data.placement?.anchorName || data.placement?.anchorId || '未设置')} · ${Number(data.placement?.accessKm || 0)} km</b></p></div>`
+      : `<div class="extension-facts"><span><small>蓝灯条目</small><b>${extensionSections.filter((section) => section.kind === 'overview').length}</b></span><span><small>绿灯条目</small><b>${extensionSections.filter((section) => section.kind === 'content').length}</b></span></div>`;
   const persona = profile
-    ? `<details class="detail-section persona-section" open><summary><span>\u4eba\u8bbe\u6863\u6848</span><small>\u5c55\u5f00</small></summary><pre>${esc(profile)}</pre></details>`
+    ? `<details class="detail-section persona-section" open><summary><span>人设档案</span><small>展开</small></summary><pre>${esc(profile)}</pre></details>`
+    : '';
+  const extensionDetails = item.itemType === 'extension'
+    ? `<section class="detail-section extension-detail-section"><div class="section-heading"><i>✦</i> 世界书条目组</div>${extensionDetailMarkup(item)}</section>`
     : '';
   $('#detail-content').innerHTML = `
     ${item.coverUrl ? `<img class="detail-cover" src="${esc(item.coverUrl)}" alt="">` : ''}
     <span class="eyebrow">${TYPE_LABEL[item.itemType]}</span><h2>${esc(item.title)}</h2>
-    <p class="detail-summary">${esc(item.summary || '\u4f5c\u8005\u6ca1\u6709\u586b\u5199\u7b80\u4ecb')}</p>
-    <div class="detail-metrics"><div class="metric metric-author"><i class="metric-icon author-icon" aria-hidden="true">\u270e</i><span><small>\u4f5c\u8005</small><b>${esc(item.authorName || '\u533f\u540d\u4f5c\u8005')}</b></span></div><div class="metric metric-like"><i class="metric-icon" aria-hidden="true">${item.liked ? '\u2665' : '\u2661'}</i><span><small>\u559c\u6b22</small><b>${item.likeCount || 0}</b></span></div><div class="metric metric-adopt"><i class="metric-icon" aria-hidden="true">\u21e9</i><span><small>\u91c7\u7528</small><b>${item.downloadCount || 0}</b></span></div></div>
+    <p class="detail-summary">${esc(item.summary || '作者没有填写简介')}</p>
+    <div class="detail-metrics"><div class="metric metric-author"><i class="metric-icon author-icon" aria-hidden="true">✎</i><span><small>作者</small><b>${esc(item.authorName || '匿名作者')}</b></span></div><div class="metric metric-like"><i class="metric-icon" aria-hidden="true">${item.liked ? '♥' : '♡'}</i><span><small>喜欢</small><b>${item.likeCount || 0}</b></span></div><div class="metric metric-adopt"><i class="metric-icon" aria-hidden="true">⇩</i><span><small>采用</small><b>${item.downloadCount || 0}</b></span></div></div>
     <div class="detail-specifics">${specifics}</div>
+    ${extensionDetails}
     ${persona}
     <div class="tags">${renderTags(item)}</div>
     <div class="detail-actions">
       <div class="detail-main-actions">
-        ${SELECT_STREAMER_MODE && item.itemType === 'streamer' ? '<button class="primary" data-detail-action="select">\u9009\u62e9\u6b64\u4e3b\u64ad</button>' : ''}
-        <button class="primary" data-detail-action="install">${state.bridge.available ? '\u5b89\u88c5\u5230\u5f53\u524d\u6e38\u620f' : '\u4e0b\u8f7d JSON'}</button>
+        ${SELECT_STREAMER_MODE && item.itemType === 'streamer' ? '<button class="primary" data-detail-action="select">选择此主播</button>' : ''}
+        <button class="primary" data-detail-action="install">${state.bridge.available ? '应用到当前游戏' : '导出 JSON'}</button>
       </div>
       <div class="detail-utility-actions">
-        <button class="utility-button like-button ${item.liked ? 'is-liked' : ''}" data-detail-action="like" aria-pressed="${item.liked ? 'true' : 'false'}"><span class="like-icon" aria-hidden="true">${item.liked ? '\u2665' : '\u2661'}</span><span>${item.liked ? '\u53d6\u6d88\u559c\u6b22' : '\u559c\u6b22'}</span><b>${item.likeCount || 0}</b></button>
-        <button class="utility-button" data-detail-action="download">\u21e9 \u5bfc\u51fa JSON</button>
+        <button class="utility-button like-button ${item.liked ? 'is-liked' : ''}" data-detail-action="like" aria-pressed="${item.liked ? 'true' : 'false'}"><span class="like-icon" aria-hidden="true">${item.liked ? '♥' : '♡'}</span><span>${item.liked ? '取消喜欢' : '喜欢'}</span><b>${item.likeCount || 0}</b></button>
+        <button class="utility-button" data-detail-action="download">⇩ 导出 JSON</button>
       </div>
     </div>`;
   $('#detail-dialog').showModal();
@@ -282,8 +413,14 @@ async function installSelected() {
   if (!state.user) { await beginLogin(); return; }
   try {
     const result = await bridgeRequest('installItem', { item }, item.itemType === 'city_node' ? 45000 : 20000);
-    await api(`/items/${encodeURIComponent(item.id)}/install`, { method: 'POST', body: { result: result || {} } });
-    toast(item.itemType === 'streamer' ? '主播已按开局自定义主播结构导入' : item.itemType === 'city_node' ? '城市节点已写入当前存档' : '拓展已写入世界书');
+    const install = await api(`/items/${encodeURIComponent(item.id)}/install`, { method: 'POST', body: { result: result || {} } });
+    const reason = install.counted
+      ? '采用量已增加 1'
+      : install.reason === 'self_install'
+        ? '作者自己应用，不计入采用量'
+        : '这个账号已经采用过，不重复计数';
+    toast(`${item.itemType === 'streamer' ? '主播已导入当前游戏' : item.itemType === 'city_node' ? '城市节点已写入当前存档' : '拓展已写入世界书'} · ${reason}`);
+    if (install.item) state.selected = install.item;
     await loadItems();
     $('#detail-dialog').close();
   } catch (error) { toast(error.message); }
@@ -313,6 +450,7 @@ function openPublish() {
   if (!state.user) { beginLogin().catch((error) => toast(error.message)); return; }
   state.publishPackage = null;
   state.gameSources = [];
+  state.extensionSections = [];
   $('#publish-form').reset();
   $('#publish-type').value = state.type;
   $('#publish-json').value = '';
@@ -322,10 +460,19 @@ function openPublish() {
 }
 
 function syncExtensionFields() {
-  $('#extension-fields').hidden = $('#publish-type').value !== 'extension';
+  const isExtension = $('#publish-type').value === 'extension';
+  $('#extension-fields').hidden = !isExtension;
+  $('#publish-source').hidden = isExtension;
+  $('#local-source-row').hidden = isExtension || !state.gameSources.length;
+  $('#package-preview').hidden = isExtension;
+  if (isExtension) {
+    if (!state.extensionSections.length) state.extensionSections = normalizeExtensionSections([], true);
+    renderExtensionSections();
+  }
 }
 
 async function readGameSource() {
+  if ($('#publish-type').value === 'extension') return toast('拓展请直接编辑世界书条目组');
   if (!state.bridge.available) return toast('独立网页模式请导入 JSON');
   try {
     const type = $('#publish-type').value;
@@ -348,12 +495,19 @@ async function chooseGameSource(index) {
 
 function setPublishPackage(pkg) {
   state.publishPackage = pkg;
-  $('#publish-type').value = pkg.itemType || pkg.type || 'streamer';
+  const type = pkg.itemType || pkg.type || 'streamer';
+  $('#publish-type').value = type;
   $('#publish-title').value = pkg.title || pkg.data?.name || '';
   $('#publish-summary').value = pkg.summary || '';
   $('#publish-tags').value = Array.isArray(pkg.tags) ? pkg.tags.join('，') : '';
   $('#publish-cover').value = pkg.coverUrl || pkg.data?.assets?.cover || '';
-  $('#publish-json').value = JSON.stringify(pkg, null, 2);
+  if (type === 'extension') {
+    state.extensionSections = normalizeExtensionSections(pkg.data?.sections || [], false);
+    $('#publish-json').value = '';
+  } else {
+    state.extensionSections = [];
+    $('#publish-json').value = JSON.stringify(pkg, null, 2);
+  }
   syncExtensionFields();
 }
 
@@ -365,14 +519,30 @@ async function readPublishFile(file) {
 }
 
 function packageFromForm() {
-  let pkg = state.publishPackage ? structuredClone(state.publishPackage) : null;
   const type = $('#publish-type').value;
-  if (!pkg && type === 'extension') {
-    pkg = { schema: 'linjiang.workshop.package', schemaVersion: 1, game: 'linjiang', itemType: 'extension', data: {
-      sections: [{ id: 'content-1', kind: 'content', content: $('#extension-content').value, triggerWords: $('#extension-triggers').value.split(/[,，]/).map((x) => x.trim()).filter(Boolean) }],
-      position: { type: 'after_character_definition', depth: 0, order: 420 },
-    } };
+  if (type === 'extension') {
+    const sections = normalizeExtensionSections(state.extensionSections).map((section) => ({
+      id: section.id,
+      kind: section.kind,
+      title: section.title,
+      content: section.content.trim(),
+      triggerWords: section.kind === 'content' ? section.triggerWords.map((word) => word.trim()).filter(Boolean) : [],
+    })).filter((section) => section.content);
+    if (!sections.length) throw new Error('请至少添加一个蓝灯或绿灯条目，并填写正文');
+    if (sections.some((section) => section.kind === 'content' && !section.triggerWords.length)) throw new Error('每个绿灯条目至少填写一个触发词');
+    const pkg = state.publishPackage?.itemType === 'extension' ? structuredClone(state.publishPackage) : {
+      schema: 'linjiang.workshop.package', schemaVersion: 1, game: 'linjiang', itemType: 'extension',
+      data: { sections: [], position: { type: 'after_character_definition', depth: 0, order: 420 } },
+    };
+    pkg.itemType = 'extension';
+    pkg.data = { ...(pkg.data || {}), sections, position: pkg.data?.position || { type: 'after_character_definition', depth: 0, order: 420 } };
+    pkg.title = $('#publish-title').value.trim();
+    pkg.summary = $('#publish-summary').value.trim();
+    pkg.tags = $('#publish-tags').value.split(/[,，]/).map((x) => x.trim()).filter(Boolean);
+    pkg.coverUrl = $('#publish-cover').value.trim();
+    return pkg;
   }
+  const pkg = state.publishPackage ? structuredClone(state.publishPackage) : null;
   if (!pkg) throw new Error('请先从游戏读取内容或导入作品 JSON');
   pkg.itemType = type;
   pkg.title = $('#publish-title').value.trim();
@@ -446,7 +616,7 @@ $('#grid').addEventListener('click', (event) => { const card = event.target.clos
 $('#detail-content').addEventListener('click', (event) => {
   const action = event.target.closest('[data-detail-action]')?.dataset.detailAction;
   if (action === 'select') {
-    if (state.selected?.itemType !== 'streamer' || !sendSelectionToParent(state.selected)) toast('当前页面未连接开局页'); else { $('#detail-dialog').close(); toast('已发送主播到开局页'); }
+    selectStreamerToOpening().catch((error) => toast(error.message));
     return;
   }
   if (action === 'install') installSelected();
@@ -460,7 +630,30 @@ $('#claim-button').addEventListener('click', claimWallet);
 $('#read-game-source').addEventListener('click', readGameSource);
 $('#local-source').addEventListener('change', (event) => chooseGameSource(event.target.value));
 $('#publish-file').addEventListener('change', (event) => event.target.files?.[0] && readPublishFile(event.target.files[0]));
-$('#publish-type').addEventListener('change', syncExtensionFields);
+$('#publish-type').addEventListener('change', () => {
+  const type = $('#publish-type').value;
+  if (type === 'extension') {
+    state.publishPackage = state.publishPackage?.itemType === 'extension' ? state.publishPackage : null;
+    state.extensionSections = normalizeExtensionSections(state.publishPackage?.data?.sections || [], true);
+  } else {
+    state.publishPackage = state.publishPackage?.itemType === type ? state.publishPackage : null;
+    state.extensionSections = [];
+  }
+  syncExtensionFields();
+});
+$('#add-blue-entry').addEventListener('click', () => addExtensionSection('overview'));
+$('#add-green-entry').addEventListener('click', () => addExtensionSection('content'));
+$('#extension-sections').addEventListener('click', (event) => {
+  const button = event.target.closest('[data-extension-action]');
+  if (!button) return;
+  const index = Number(button.dataset.index);
+  const action = button.dataset.extensionAction;
+  if (action === 'move-up') moveExtensionSection(index, -1);
+  if (action === 'move-down') moveExtensionSection(index, 1);
+  if (action === 'remove') removeExtensionSection(index);
+  if (action === 'add-trigger') addExtensionTrigger(index);
+  if (action === 'remove-trigger') removeExtensionTrigger(index, Number(button.dataset.wordIndex));
+});
 $('#publish-form').addEventListener('submit', submitPublish);
 $('#search').addEventListener('input', debounce(() => { state.page = 1; loadItems(); }, 250));
 $('#sort').addEventListener('change', () => { state.page = 1; loadItems(); });

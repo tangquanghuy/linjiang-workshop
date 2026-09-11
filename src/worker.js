@@ -315,7 +315,7 @@ async function recordInstall(request, env, itemId) {
     ]);
   }
   const row = await getItemRow(env.DB, itemId, auth.user.discord_id);
-  return json({ ok: true, counted, rewarded: counted, item: mapItemRow(row) });
+  return json({ ok: true, counted, rewarded: counted, reason: counted ? 'counted' : 'already_installed', item: mapItemRow(row) });
 }
 
 async function downloadItem(env, itemId) {

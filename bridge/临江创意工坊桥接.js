@@ -301,10 +301,19 @@
     const base = extensionEntryBase(pkg);
     const sections = Array.isArray(pkg.data?.sections) ? pkg.data.sections : [];
     if (!sections.length) throw new Error('拓展正文为空');
+    if (sections.some((section) => section.kind === 'content' && (!Array.isArray(section.triggerWords) || !section.triggerWords.length))) {
+      throw new Error('每个绿灯条目至少填写一个触发词');
+    }
     const position = pkg.data?.position || {};
+    let blueIndex = 0;
+    let greenIndex = 0;
     const entries = sections.map((section, index) => {
-      const suffix = sections.length === 1 ? '' : section.kind === 'overview' ? '｜总览' : `｜${String(index + 1).padStart(2, '0')}`;
-      return managedEntry(`${base}${suffix}`, section.content, section.kind === 'content' ? section.triggerWords : [], { ...position, order: Number(position.order || 420) + index });
+      const isBlue = section.kind === 'overview';
+      const lightIndex = isBlue ? ++blueIndex : ++greenIndex;
+      const lightLabel = `${isBlue ? '蓝灯' : '绿灯'}-${String(lightIndex).padStart(2, '0')}`;
+      const titleLabel = clean(section.title, 80);
+      const suffix = `｜${lightLabel}${titleLabel ? `｜${titleLabel}` : ''}`;
+      return managedEntry(`${base}${suffix}`, section.content, isBlue ? [] : section.triggerWords, { ...position, order: Number(position.order || 420) + index });
     });
     await updateWorldbook((current) => reorderManaged([...current.filter((entry) => !clean(entry?.name).startsWith(base)), ...entries]));
     return { worldbookBase: base, entries: entries.length };

@@ -191,6 +191,9 @@ export function validatePackage(pkg) {
     if (!pkg.data.placement.plate || pkg.data.placement.localPos.length < 2) throw new Error('城市节点定位信息不完整');
   }
   if (pkg.itemType === 'extension' && !pkg.data.sections.length) throw new Error('拓展正文为空');
+  if (pkg.itemType === 'extension' && pkg.data.sections.some((section) => section.kind === 'content' && !section.triggerWords.length)) {
+    throw new Error('每个绿灯条目至少填写一个触发词');
+  }
   const bytes = new TextEncoder().encode(JSON.stringify(pkg)).byteLength;
   if (bytes > 512 * 1024) throw new Error('作品包超过 512 KB');
   return pkg;

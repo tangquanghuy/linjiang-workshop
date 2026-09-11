@@ -28,3 +28,27 @@ test('城市节点保留相对位置和锚点', () => {
 test('拓展正文为空时校验报错', () => {
   assert.throws(() => normalizePackage({ itemType: 'extension', title: '空拓展', data: {} }, { authorName: '作者丙' }), /拓展正文为空/);
 });
+
+
+test('拓展允许多个蓝灯和绿灯条目，但每个绿灯都需要触发词', () => {
+  const pkg = normalizePackage({
+    itemType: 'extension',
+    title: '夜间经济系统',
+    data: {
+      sections: [
+        { id: 'blue-1', kind: 'overview', title: '规则总览', content: '常驻规则' },
+        { id: 'blue-2', kind: 'overview', content: '第二组常驻规则' },
+        { id: 'green-1', kind: 'content', title: '夜市经营', content: '夜市规则', triggerWords: ['夜市', '摆摊'] },
+        { id: 'green-2', kind: 'content', content: '黑市规则', triggerWords: ['黑市'] },
+      ],
+    },
+  }, { authorName: '作者丁' });
+  assert.equal(pkg.data.sections.length, 4);
+  assert.equal(pkg.data.sections.filter((section) => section.kind === 'overview').length, 2);
+  assert.equal(pkg.data.sections.filter((section) => section.kind === 'content').length, 2);
+  assert.throws(() => normalizePackage({
+    itemType: 'extension',
+    title: '缺少触发词',
+    data: { sections: [{ kind: 'content', content: '正文', triggerWords: [] }] },
+  }, { authorName: '作者戊' }), /每个绿灯条目至少填写一个触发词/);
+});
