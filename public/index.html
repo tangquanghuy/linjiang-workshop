@@ -8,34 +8,42 @@
   <link rel="stylesheet" href="./styles.css">
 </head>
 <body>
-  <div class="ambient ambient-a"></div><div class="ambient ambient-b"></div>
-  <header class="topbar">
-    <div class="brand"><span class="brand-mark">江</span><div><b>临江创意工坊</b><small>主播 · 城市节点 · 拓展</small></div></div>
-    <div class="top-actions">
-      <button id="bridge-state" class="chip" type="button">检测游戏连接</button>
-      <button id="wallet-button" class="chip" type="button">代币 0</button>
-      <button id="login-button" class="primary" type="button">Discord 登录</button>
-    </div>
-  </header>
+  <div class="page-glow page-glow-a"></div><div class="page-glow page-glow-b"></div>
+  <div class="app-shell">
+    <header class="site-header">
+      <div class="brand">
+        <div class="brand-mark"><img src="./assets/mark-sakura.png" alt=""></div>
+        <div class="brand-script">Linjiang</div>
+        <div class="brand-copy"><h1>临江创意工坊</h1><p>CREATOR WORKSHOP · 2026</p></div>
+      </div>
+      <div class="header-actions">
+        <button id="bridge-state" class="status-pill" type="button"><i></i>检测游戏连接</button>
+        <button id="wallet-button" class="status-pill" type="button">代币 0</button>
+        <button id="login-button" class="primary" type="button">Discord 登录</button>
+      </div>
+    </header>
 
-  <main>
-    <section class="hero panel">
-      <div><span class="eyebrow">LINJIANG COMMUNITY ARCHIVE</span><h1>把你创造的临江，分享给下一位玩家。</h1><p>工坊作品以版本化 JSON 为底层格式。游戏内通过桥接直接投稿与安装，独立页面仍保留 JSON 导入、导出能力。</p></div>
-      <button id="publish-button" class="primary big" type="button">发布作品</button>
-    </section>
+    <nav id="tabs" class="workshop-nav" aria-label="工坊分类">
+      <button class="active" data-type="streamer"><span>01 / STREAMER</span><b>自定义主播</b></button>
+      <button data-type="city_node"><span>02 / CITY NODE</span><b>城市节点</b></button>
+      <button data-type="extension"><span>03 / EXTENSION</span><b>拓展内容</b></button>
+    </nav>
 
-    <section class="toolbar panel">
-      <nav id="tabs" class="tabs">
-        <button class="active" data-type="streamer">自定义主播</button>
-        <button data-type="city_node">城市节点</button>
-        <button data-type="extension">拓展</button>
-      </nav>
-      <div class="filters"><input id="search" type="search" placeholder="搜索作品、作者"><select id="sort"><option value="recent">最近更新</option><option value="downloads">采用最多</option><option value="likes">喜欢最多</option></select></div>
-    </section>
+    <main class="main-content">
+      <section class="section-heading">
+        <div><div class="eyebrow">LINJIANG COMMUNITY ARCHIVE</div><h2>创意工坊</h2><p>浏览、安装和分享玩家创作。</p></div>
+        <button id="publish-button" class="primary big" type="button">＋ 发布作品</button>
+      </section>
 
-    <section id="status" class="status">正在读取工坊……</section>
-    <section id="grid" class="work-grid" aria-live="polite"></section>
-  </main>
+      <section class="toolbar card">
+        <div class="toolbar-label"><span class="live-dot"></span><b>作品档案</b><small id="status">正在读取工坊……</small></div>
+        <div class="filters"><label class="search-box"><span>⌕</span><input id="search" type="search" placeholder="搜索作品或作者"></label><select id="sort"><option value="recent">最近更新</option><option value="downloads">采用最多</option><option value="likes">喜欢最多</option></select></div>
+      </section>
+      <section id="grid" class="work-grid" aria-live="polite"></section>
+    </main>
+
+    <footer class="site-footer"><span>临江 · 玩家创作档案</span><span>JSON PACK / BRIDGE READY</span></footer>
+  </div>
 
   <dialog id="detail-dialog" class="dialog"><div class="dialog-card detail-card"><button class="dialog-x" data-close="detail-dialog">×</button><div id="detail-content"></div></div></dialog>
   <dialog id="publish-dialog" class="dialog"><form id="publish-form" class="dialog-card publish-card" method="dialog"><button class="dialog-x" type="button" data-close="publish-dialog">×</button>
@@ -47,18 +55,14 @@
     <label>简介<textarea id="publish-summary" maxlength="1000" rows="3"></textarea></label>
     <label>标签<input id="publish-tags" maxlength="200" placeholder="日常，直播，落霞区"></label>
     <label>封面网络链接<input id="publish-cover" type="url" placeholder="https://..."></label>
-    <div id="extension-fields" hidden>
-      <label>触发词<input id="extension-triggers" placeholder="逗号分隔"></label>
-      <label>拓展正文<textarea id="extension-content" rows="10" placeholder="写入世界书的正文"></textarea></label>
-    </div>
-    <details><summary>作品包预览</summary><textarea id="publish-json" rows="12" spellcheck="false"></textarea></details>
-    <output id="publish-status"></output>
+    <div id="extension-fields" hidden><label>触发词<input id="extension-triggers" placeholder="逗号分隔"></label><label>拓展正文<textarea id="extension-content" rows="10" placeholder="写入世界书的正文"></textarea></label></div>
+    <details><summary>作品包预览</summary><textarea id="publish-json" rows="12" spellcheck="false"></textarea></details><output id="publish-status"></output>
     <div class="dialog-actions"><button type="button" class="secondary" data-close="publish-dialog">取消</button><button id="publish-submit" type="submit" class="primary">确认发布</button></div>
   </form></dialog>
 
   <dialog id="wallet-dialog" class="dialog"><div class="dialog-card wallet-card"><button class="dialog-x" data-close="wallet-dialog">×</button><span class="eyebrow">CREATOR WALLET</span><h2>创作代币</h2><div class="wallet-numbers"><div><small>云端可领取</small><b id="cloud-balance">0</b></div><div><small>本浏览器</small><b id="local-balance">0</b></div><div><small>累计获得</small><b id="earned-total">0</b></div></div><p>每位已登录玩家首次成功采用一件作品，为作者结算 1 枚代币；作者自己安装与重复安装不计入。</p><button id="claim-button" class="primary big" type="button">领取到本浏览器</button><output id="wallet-status"></output></div></dialog>
-
   <div id="toast" class="toast" role="status"></div>
   <script type="module" src="./app.js"></script>
 </body>
 </html>
+
