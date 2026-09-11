@@ -1,7 +1,10 @@
-﻿node_modules/
+node_modules/
 .wrangler/
 .dev.vars
 .env
 *.log
 .DS_Store
 .wrangler-dry-run/
+.wrangler-login.out
+.wrangler-login.out.err
+.secret-*

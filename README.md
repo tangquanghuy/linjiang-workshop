@@ -120,7 +120,7 @@ bridge/临江创意工坊桥接.js
 发布 Worker 后，把脚本顶部的：
 
 ```js
-https://linjiang-workshop.example.workers.dev/?embed=1
+https://workshop.rown.dpdns.org/?embed=1
 ```
 
 替换成正式地址。也可以在脚本执行前配置：

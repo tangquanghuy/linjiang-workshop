@@ -14,7 +14,7 @@
   if (window[SCRIPT_KEY]) return;
   window[SCRIPT_KEY] = true;
 
-  const TARGET_URL = String(window.LINJIANG_WORKSHOP_URL || 'https://linjiang-workshop.example.workers.dev/?embed=1');
+  const TARGET_URL = String(window.LINJIANG_WORKSHOP_URL || 'https://workshop.rown.dpdns.org/?embed=1');
   const TARGET_ORIGIN = (() => { try { return new URL(TARGET_URL).origin; } catch { return ''; } })();
   const CHANNEL = 'linjiang-workshop:bridge';
   const PANEL_ID = 'linjiang-workshop-panel';

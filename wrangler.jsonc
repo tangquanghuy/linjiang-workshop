@@ -1,8 +1,10 @@
-﻿{
+{
   "$schema": "node_modules/wrangler/config-schema.json",
   "name": "linjiang-workshop",
   "main": "src/worker.js",
   "compatibility_date": "2026-09-10",
+  "workers_dev": true,
+  "preview_urls": true,
   "assets": {
     "directory": "./public",
     "binding": "ASSETS"
@@ -11,7 +13,13 @@
     {
       "binding": "DB",
       "database_name": "linjiang_workshop",
-      "database_id": "REPLACE_WITH_D1_DATABASE_ID"
+      "database_id": "c791254a-86e3-4b3f-98f6-a80409afefa4"
+    }
+  ],
+  "routes": [
+    {
+      "pattern": "workshop.rown.dpdns.org",
+      "custom_domain": true
     }
   ],
   "vars": {
