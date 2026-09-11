@@ -40,6 +40,7 @@
         <div class="filters"><label class="search-box"><span>⌕</span><input id="search" type="search" placeholder="搜索作品或作者"></label><select id="sort"><option value="recent">最近更新</option><option value="downloads">采用最多</option><option value="likes">喜欢最多</option></select></div>
       </section>
       <section id="grid" class="work-grid" aria-live="polite"></section>
+      <nav id="pagination" class="pagination" aria-label="????"></nav>
     </main>
 
     <footer class="site-footer"><span>临江 · 玩家创作档案</span><span>JSON PACK / BRIDGE READY</span></footer>
@@ -62,6 +63,6 @@
 
   <dialog id="wallet-dialog" class="dialog"><div class="dialog-card wallet-card"><button class="dialog-x" data-close="wallet-dialog">×</button><span class="eyebrow">CREATOR WALLET</span><h2>创作代币</h2><div class="wallet-numbers"><div><small>云端可领取</small><b id="cloud-balance">0</b></div><div><small>本浏览器</small><b id="local-balance">0</b></div><div><small>累计获得</small><b id="earned-total">0</b></div></div><p>每位已登录玩家首次成功采用一件作品，为作者结算 1 枚代币；作者自己安装与重复安装不计入。</p><button id="claim-button" class="primary big" type="button">领取到本浏览器</button><output id="wallet-status"></output></div></dialog>
   <div id="toast" class="toast" role="status"></div>
-  <script type="module" src="./app.js?v=detail-20260912-v2"></script>
+  <script type="module" src="./app.js?v=detail-20260912-v3"></script>
 </body>
 </html>

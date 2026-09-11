@@ -16,6 +16,10 @@ const state = {
   bridge: { available: false, capabilities: {} },
   publishPackage: null,
   gameSources: [],
+  page: 1,
+  pageSize: 12,
+  total: 0,
+  totalPages: 0,
 };
 
 const $ = (selector) => document.querySelector(selector);
@@ -187,43 +191,34 @@ async function beginLogin() {
   toast(`???${state.user?.username || result.user?.username || '???'}`);
 }
 
-async function loadItems() {
-  status.textContent = '正在读取工坊……';
-  try {
-    const q = new URLSearchParams({ type: state.type, sort: $('#sort').value });
-    const search = $('#search').value.trim();
-    if (search) q.set('q', search);
-    const data = await api(`/items?${q}`);
-    state.items = data.items || [];
-    paintItems();
-    status.textContent = `${TYPE_LABEL[state.type]} · ${state.items.length} 件作品`;
-  } catch (error) {
-    status.textContent = `读取失败：${error.message}`;
-    $('#grid').innerHTML = '<div class="empty">工坊暂时没有返回内容</div>';
-  }
-}
-
-function paintItems() {
+async function loadItems(page = state.page) {  status.textContent = '\u6b63\u5728\u8bfb\u53d6\u5de5\u574a\u2026\u2026';  try {    const q = new URLSearchParams({ type: state.type, sort: $('#sort').value, page: String(page), pageSize: String(state.pageSize) });    const search = $('#search').value.trim();    if (search) q.set('q', search);    const data = await api(`/items?${q}`);    state.items = data.items || [];    state.page = Number(data.page || page) || 1;    state.pageSize = Number(data.pageSize || state.pageSize) || 12;    state.total = Number(data.total || state.items.length) || 0;    state.totalPages = Number(data.totalPages || Math.max(1, Math.ceil(state.total / state.pageSize))) || 1;    paintItems();    paintPagination();    const first = state.total ? ((state.page - 1) * state.pageSize + 1) : 0;    const last = state.total ? Math.min(state.total, state.page * state.pageSize) : 0;    status.textContent = state.total ? `${TYPE_LABEL[state.type]} \u00b7 ${first}\u2013${last} / ${state.total} \u4ef6\u4f5c\u54c1` : `\u8fd8\u6ca1\u6709${TYPE_LABEL[state.type]}\u4ef6\u4f5c\u54c1`;  } catch (error) {    status.textContent = `\u8bfb\u53d6\u5931\u8d25\uff1a${error.message}`;    state.total = 0; state.totalPages = 0;    $('#grid').innerHTML = '<div class="empty">\u5de5\u574a\u6682\u65f6\u6ca1\u6709\u8fd4\u56de\u5185\u5bb9</div>';    paintPagination();  }}function paintItems() {
   const grid = $('#grid');
   if (!state.items.length) {
-    grid.innerHTML = `<div class="empty">这里还没有${TYPE_LABEL[state.type]}作品。登录后发布第一件吧。</div>`;
+    grid.innerHTML = `<div class="empty">\u8fd9\u91cc\u8fd8\u6ca1\u6709${TYPE_LABEL[state.type]}\u4f5c\u54c1\u3002\u767b\u5f55\u540e\u53d1\u5e03\u7b2c\u4e00\u4ef6\u5427</div>`;
     return;
   }
   grid.innerHTML = state.items.map((item) => `
     <article class="work-card" data-item-id="${esc(item.id)}">
-      <div class="cover">${item.coverUrl ? `<img src="${esc(item.coverUrl)}" alt="" loading="lazy" data-hide-on-error>` : `<div class="cover-fallback">${item.itemType === 'streamer' ? '♢' : item.itemType === 'city_node' ? '⌖' : '✦'}</div>`}<span class="type-badge">${TYPE_LABEL[item.itemType]}</span></div>
-      <div class="card-body"><h3>${esc(item.title)}</h3><p>${esc(item.summary || '作者没有填写简介')}</p>
+      <div class="cover">${item.coverUrl ? `<img src="${esc(item.coverUrl)}" alt="" loading="lazy" data-hide-on-error>` : `<div class="cover-fallback">${item.itemType === 'streamer' ? '\u2662' : item.itemType === 'city_node' ? '\u2316' : '\u2726'}</div>`}<span class="type-badge">${TYPE_LABEL[item.itemType]}</span></div>
+      <div class="card-body"><h3>${esc(item.title)}</h3><p>${esc(item.summary || '\u4f5c\u8005\u6ca1\u6709\u586b\u5199\u7b80\u4ecb')}</p>
       <div class="tags">${(item.tags || []).map((tag) => `<em>${esc(tag)}</em>`).join('')}</div>
-      <div class="card-meta"><span>${esc(item.authorName)}</span><span>♡ ${item.likeCount} · ⇩ ${item.downloadCount}</span></div></div>
+      <div class="card-meta"><span class="card-author"><small>\u4f5c\u8005</small><b>${esc(item.authorName || '\u533f\u540d\u4f5c\u8005')}</b></span><span class="card-stat"><small>\u559c\u6b22</small><b>${item.likeCount || 0}</b></span><span class="card-stat"><small>\u91c7\u7528</small><b>${item.downloadCount || 0}</b></span></div></div>
     </article>`).join('');
   grid.querySelectorAll('[data-hide-on-error]').forEach((image) => image.addEventListener('error', () => image.remove()));
 }
 
-function worldbookName(item) {
-  const author = item.authorName || item.package?.authorName || '匿名作者';
-  if (item.itemType === 'streamer') return `🧩mod 主播人设｜${item.package?.data?.name || item.title}｜${author}`;
-  if (item.itemType === 'extension') return `🧩mod 拓展｜${item.title}｜${author}`;
-  return '';
+function paintPagination() {
+  const node = $('#pagination');
+  if (!node) return;
+  if (state.totalPages <= 1) { node.innerHTML = ''; return; }
+  const pages = new Set([1, state.totalPages, state.page, state.page - 1, state.page + 1]);
+  const visible = [...pages].filter((page) => page >= 1 && page <= state.totalPages).sort((a, b) => a - b);
+  const parts = [];
+  visible.forEach((page, index) => {
+    if (index && page - visible[index - 1] > 1) parts.push('<span class="pagination-gap">\u2026</span>');
+    parts.push(`<button type="button" class="${page === state.page ? 'active' : ''}" data-page="${page}" aria-current="${page === state.page ? 'page' : 'false'}">${page}</button>`);
+  });
+  node.innerHTML = `<button type="button" class="pagination-arrow" data-page="${state.page - 1}" ${state.page <= 1 ? 'disabled' : ''}>\u4e0a\u4e00\u9875</button>${parts.join('')}<button type="button" class="pagination-arrow" data-page="${state.page + 1}" ${state.page >= state.totalPages ? 'disabled' : ''}>\u4e0b\u4e00\u9875</button>`;
 }
 
 function sendSelectionToParent(item) {
@@ -242,13 +237,12 @@ function openDetail(item) {
   state.selected = item;
   const pkg = item.package || {};
   const data = pkg.data || {};
-  const partCount = Object.values(data.assets?.parts || {}).filter(Boolean).length;
   const profile = item.itemType === 'streamer' ? String(data.profileYaml || data.yaml || '').trim() : '';
   const specifics = item.itemType === 'streamer'
-    ? `<p><b>${esc(data.name)}</b> / ${esc(data.handle)} \u00b7 \u4f53\u91cf\u6863\u4f4d ${Number(data.tier || 0)} \u00b7 \u90e8\u4f4d\u56fe ${partCount}/4</p><p>\u4e16\u754c\u4e66\uff1a<code>${esc(worldbookName(item))}</code></p>`
+    ? (data.handle && data.handle !== data.name ? `<p>\u4e3b\u64ad\u7f51\u540d \u00b7 ${esc(data.handle)}</p>` : '')
     : item.itemType === 'city_node'
       ? `<p><b>${esc(data.district)} \u00b7 ${esc(data.name)}</b> / ${esc(data.archetype)} / \u79c1\u5bc6\u5ea6 ${Number(data.privacy || 0)}</p><p>\u5e95\u677f ${esc(data.placement?.plate)} \u00b7 \u951a\u70b9 ${esc(data.placement?.anchorName || data.placement?.anchorId || '\u672a\u8bbe\u7f6e')}</p>`
-      : `<p>\u4e16\u754c\u4e66\uff1a<code>${esc(worldbookName(item))}</code></p><p>${Number(data.sections?.length || 0)} \u4e2a\u5185\u5bb9\u533a\u5757</p>`;
+      : `<p>${Number(data.sections?.length || 0)} \u4e2a\u5185\u5bb9\u533a\u5757</p>`;
   const persona = profile
     ? `<details class="detail-section persona-section" open><summary><span>\u4eba\u8bbe\u6863\u6848</span><small>WORLD BOOK PROFILE</small></summary><pre>${esc(profile)}</pre></details>`
     : '';
@@ -256,7 +250,7 @@ function openDetail(item) {
     ${item.coverUrl ? `<img class="detail-cover" src="${esc(item.coverUrl)}" alt="">` : ''}
     <span class="eyebrow">${TYPE_LABEL[item.itemType]}</span><h2>${esc(item.title)}</h2>
     <p class="detail-summary">${esc(item.summary || '\u4f5c\u8005\u6ca1\u6709\u586b\u5199\u7b80\u4ecb')}</p>
-    <div class="detail-author-row"><span>${esc(item.authorName || '\u533f\u540d\u4f5c\u8005')}</span><span>\u559c\u6b22 ${item.likeCount || 0} \u00b7 \u91c7\u7528 ${item.downloadCount || 0}</span></div>
+    <div class="detail-metrics"><div><small>\u4f5c\u8005</small><b>${esc(item.authorName || '\u533f\u540d\u4f5c\u8005')}</b></div><div><small>\u559c\u6b22</small><b>${item.likeCount || 0}</b></div><div><small>\u91c7\u7528</small><b>${item.downloadCount || 0}</b></div></div>
     <div class="detail-specifics">${specifics}</div>
     ${persona}
     <div class="tags">${(item.tags || []).map((tag) => `<em>${esc(tag)}</em>`).join('')}</div>
@@ -438,7 +432,7 @@ function syncTabs() {
 $('#tabs').addEventListener('click', (event) => {
   const button = event.target.closest('[data-type]');
   if (!button) return;
-  state.type = button.dataset.type; syncTabs(); loadItems();
+  state.type = button.dataset.type; state.page = 1; syncTabs(); loadItems();
 });
 $('#grid').addEventListener('click', (event) => { const card = event.target.closest('[data-item-id]'); if (card) openDetail(state.items.find((item) => item.id === card.dataset.itemId)); });
 $('#detail-content').addEventListener('click', (event) => {
@@ -460,8 +454,9 @@ $('#local-source').addEventListener('change', (event) => chooseGameSource(event.
 $('#publish-file').addEventListener('change', (event) => event.target.files?.[0] && readPublishFile(event.target.files[0]));
 $('#publish-type').addEventListener('change', syncExtensionFields);
 $('#publish-form').addEventListener('submit', submitPublish);
-$('#search').addEventListener('input', debounce(loadItems, 250));
-$('#sort').addEventListener('change', loadItems);
+$('#search').addEventListener('input', debounce(() => { state.page = 1; loadItems(); }, 250));
+$('#sort').addEventListener('change', () => { state.page = 1; loadItems(); });
+$('#pagination').addEventListener('click', (event) => { const button = event.target.closest('[data-page]'); if (!button || button.disabled) return; state.page = Number(button.dataset.page) || 1; loadItems(state.page); });
 document.addEventListener('click', (event) => { const id = event.target.closest('[data-close]')?.dataset.close; if (id) document.getElementById(id)?.close(); });
 
 document.querySelectorAll('dialog.dialog').forEach((dialog) => dialog.addEventListener('click', (event) => {

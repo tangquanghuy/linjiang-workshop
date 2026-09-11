@@ -168,6 +168,8 @@ async function listItems(request, env) {
   const type = readText(url.searchParams.get('type'), 30);
   const search = readText(url.searchParams.get('q'), 80).toLowerCase();
   const sort = readText(url.searchParams.get('sort'), 20);
+  const pageSize = Math.min(48, Math.max(1, Number(url.searchParams.get('pageSize') || 12) || 12));
+  const page = Math.max(1, Number(url.searchParams.get('page') || 1) || 1);
   const auth = await requireUser(request, env, false);
   const clauses = ["i.status = 'published'"];
   const params = [];
@@ -179,15 +181,21 @@ async function listItems(request, env) {
   const order = sort === 'downloads' ? 'i.download_count DESC, i.updated_at DESC'
     : sort === 'likes' ? 'i.like_count DESC, i.updated_at DESC' : 'i.updated_at DESC';
   const viewer = auth?.user?.discord_id || '';
+  const where = clauses.join(' AND ');
+  const totalRow = await env.DB.prepare(`SELECT COUNT(*) AS total FROM workshop_items i WHERE ${where}`).bind(...params).first();
+  const total = Number(totalRow?.total || 0);
+  const totalPages = Math.max(1, Math.ceil(total / pageSize));
+  const currentPage = Math.min(page, totalPages);
+  const offset = (currentPage - 1) * pageSize;
   const result = await env.DB.prepare(`
     SELECT i.*, CASE WHEN l.user_discord_id IS NULL THEN 0 ELSE 1 END AS liked
     FROM workshop_items i
     LEFT JOIN item_likes l ON l.item_id = i.id AND l.user_discord_id = ?
-    WHERE ${clauses.join(' AND ')}
+    WHERE ${where}
     ORDER BY ${order}
-    LIMIT 100
-  `).bind(viewer, ...params).all();
-  return json({ ok: true, items: (result.results || []).map(mapItemRow) });
+    LIMIT ? OFFSET ?
+  `).bind(viewer, ...params, pageSize, offset).all();
+  return json({ ok: true, items: (result.results || []).map(mapItemRow), page: currentPage, pageSize, total, totalPages });
 }
 
 async function listMyItems(request, env) {
