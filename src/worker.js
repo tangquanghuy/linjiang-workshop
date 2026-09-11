@@ -397,7 +397,9 @@ function bearerToken(request) {
 
 function authPopupHtml(payload, targetOrigin) {
   const safePayload = JSON.stringify({ channel: 'linjiang-workshop:auth', ...payload }).replace(/</g, '\\u003c');
-  const safeTarget = JSON.stringify(safeOrigin(targetOrigin) || '*');
+  // The OAuth popup may be opened by the Tavern host for a nested workshop iframe.
+  // Receivers validate source and origin before forwarding the session payload.
+  const safeTarget = JSON.stringify('*');
   return new Response(`<!doctype html><meta charset="utf-8"><title>临江创意工坊登录</title><style>body{font-family:system-ui;background:#0b1020;color:#eef3ff;display:grid;place-items:center;min-height:100vh;margin:0}main{padding:28px;border:1px solid #34405f;border-radius:18px;background:#151c31}small{color:#aab5d0}</style><main><b>${payload.ok ? '登录完成' : '登录遇到问题'}</b><br><small>${escapeHtml(payload.error || '窗口将自动关闭')}</small></main><script>if(window.opener){window.opener.postMessage(${safePayload},${safeTarget});setTimeout(()=>window.close(),180)}<\/script>`, {
     headers: { 'content-type': 'text/html; charset=utf-8' },
   });

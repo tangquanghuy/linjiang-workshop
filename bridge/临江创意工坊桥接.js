@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         临江创意工坊桥接
 // @namespace    linjiang.workshop
-// @version      0.1.1
+// @version      0.1.2
 // @description  在酒馆内打开临江创意工坊，并负责主播、城市节点、拓展与本地代币写入
 // @match        */*
 // @grant        none
@@ -427,7 +427,7 @@
       const panel = hostDocument().getElementById(PANEL_ID);
       const frame = panel?.querySelector('iframe');
       const data = event.data;
-      // 工坊也可能嵌在开局页的二层 iframe 中；嵌套工坊会直接把请求发给 top。
+      // Nested workshop iframes send their bridge requests directly to top.
       const isKnownPanel = frame && event.source === frame.contentWindow;
       const isNestedWorkshop = event.source && event.source !== host && data?.channel === CHANNEL;
       if ((!isKnownPanel && !isNestedWorkshop) || !data || data.channel !== CHANNEL || data.kind !== 'request') return;
@@ -438,7 +438,47 @@
     });
   }
 
+  function setupAuthMessages() {
+    const host = hostWindow();
+    let loginWindow = null;
+    let pending = null;
+    host.addEventListener('message', (event) => {
+      const data = event.data;
+      if (!data || data.channel !== 'linjiang-workshop:auth') return;
+
+      if (data.kind === 'request' && data.action === 'openDiscordLogin') {
+        if (TARGET_ORIGIN && event.origin !== TARGET_ORIGIN) return;
+        if (!event.source || event.source === host) return;
+        if (pending?.requestId === data.requestId && loginWindow && !loginWindow.closed) {
+          try { loginWindow.focus(); } catch {}
+          return;
+        }
+        pending = { source: event.source, origin: event.origin, requestId: data.requestId };
+        if (loginWindow && !loginWindow.closed) {
+          try { loginWindow.focus(); } catch {}
+          return;
+        }
+        loginWindow = host.open(data.url, 'linjiang_workshop_discord', 'width=620,height=820,scrollbars=yes,resizable=yes');
+        if (!loginWindow) {
+          pending.source?.postMessage({ channel: 'linjiang-workshop:auth', kind: 'error', requestId: data.requestId, ok: false, error: 'Popup permission is required for Discord login' }, event.origin);
+          pending = null;
+        }
+        return;
+      }
+
+      // The callback page is opened by this host, so only that exact popup and origin are accepted.
+      if (TARGET_ORIGIN && event.origin !== TARGET_ORIGIN) return;
+      if (!loginWindow || event.source !== loginWindow || typeof data.ok !== 'boolean') return;
+      const request = pending;
+      pending = null;
+      if (request?.source) request.source.postMessage({ ...data, kind: 'response', requestId: request.requestId }, request.origin);
+      try { if (!loginWindow.closed) loginWindow.close(); } catch {}
+      loginWindow = null;
+    });
+  }
+
   setupMessages();
+  setupAuthMessages();
   try {
     const core = wins().find((win) => typeof win.eventOn === 'function' && typeof win.getButtonEvent === 'function');
     if (core) core.eventOn(core.getButtonEvent(BUTTON_EVENT_NAME), openPanel);
