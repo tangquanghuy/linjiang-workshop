@@ -1,7 +1,7 @@
-﻿// ==UserScript==
+// ==UserScript==
 // @name         临江创意工坊桥接
 // @namespace    linjiang.workshop
-// @version      0.1.0
+// @version      0.1.1
 // @description  在酒馆内打开临江创意工坊，并负责主播、城市节点、拓展与本地代币写入
 // @match        */*
 // @grant        none
@@ -427,7 +427,10 @@
       const panel = hostDocument().getElementById(PANEL_ID);
       const frame = panel?.querySelector('iframe');
       const data = event.data;
-      if (!frame || event.source !== frame.contentWindow || !data || data.channel !== CHANNEL || data.kind !== 'request') return;
+      // 工坊也可能嵌在开局页的二层 iframe 中；嵌套工坊会直接把请求发给 top。
+      const isKnownPanel = frame && event.source === frame.contentWindow;
+      const isNestedWorkshop = event.source && event.source !== host && data?.channel === CHANNEL;
+      if ((!isKnownPanel && !isNestedWorkshop) || !data || data.channel !== CHANNEL || data.kind !== 'request') return;
       if (TARGET_ORIGIN && event.origin !== TARGET_ORIGIN) return;
       const reply = { channel: CHANNEL, kind: 'response', id: data.id };
       try { event.source.postMessage({ ...reply, ok: true, payload: await handleAction(data.action, data.payload || {}) }, event.origin); }

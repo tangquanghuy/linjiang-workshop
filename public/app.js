@@ -1,4 +1,4 @@
-﻿const API = '/api';
+const API = '/api';
 const SESSION_KEY = 'linjiang_workshop_session_v1';
 const LOCAL_WALLET_KEY = 'linjiang_workshop_local_tokens_v1';
 const USED_CLAIMS_KEY = 'linjiang_workshop_used_claims_v1';
@@ -65,7 +65,8 @@ function bridgeRequest(action, payload = {}, timeout = 8000) {
       data.ok ? resolve(data.payload) : reject(new Error(data.error || '游戏桥接执行失败'));
     };
     window.addEventListener('message', onMessage);
-    window.parent.postMessage({ channel: BRIDGE_CHANNEL, kind: 'request', id, action, payload }, '*');
+    const target = window.top || window.parent;
+    target.postMessage({ channel: BRIDGE_CHANNEL, kind: 'request', id, action, payload }, '*');
   });
 }
 
