@@ -108,3 +108,4 @@ button,input,select,textarea{font:inherit}[hidden]{display:none!important}button
 @media(max-width:580px){.installed-heading{display:grid;gap:12px}.installed-heading .secondary{justify-self:start}.installed-grid{grid-template-columns:1fr}}
 
 .delete-published-button{color:#ffd3de!important;border-color:rgba(255,120,176,.36)!important;background:rgba(255,120,176,.08)!important}.delete-published-button:hover{color:#fff!important;background:rgba(205,66,112,.38)!important;border-color:rgba(255,143,181,.66)!important}
+@media(max-width:580px){.detail-card pre,.detail-section pre{max-height:none;overflow:visible;touch-action:auto}}
