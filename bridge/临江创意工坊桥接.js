@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         临江创意工坊桥接
 // @namespace    linjiang.workshop
-// @version      0.1.5
+// @version      0.1.6
 // @description  在酒馆内打开临江创意工坊，并负责主播、城市节点、拓展与本地代币写入
 // @match        */*
 // @grant        none
@@ -11,7 +11,7 @@
   'use strict';
 
   const SCRIPT_KEY = '__linjiangWorkshopBridgeV1';
-  const BRIDGE_VERSION = 'bridge-20260912-city-detail-fields-v1';
+  const BRIDGE_VERSION = 'bridge-20260912-opening-streamer-read-v1';
   if (window[SCRIPT_KEY]) return;
   window[SCRIPT_KEY] = true;
 
@@ -221,6 +221,7 @@
     context.stat.系统配置.直播间[name] = {
       自定义: true, 代表色: clean(d.theme, 30), 主播网名: handle,
       封面: remote(d.assets?.cover), 封面类型: remote(d.assets?.cover) ? 'url' : '', 部位图: partMap,
+      创意工坊资料: { age: Number(d.age) || 23, home: clean(d.home, 120), homeData: d.homeData || null, categories: Array.isArray(d.categories) ? d.categories.slice(0, 16) : [], tier: scale.tier, hoursStart: clean(d.hoursStart, 5), hoursEnd: clean(d.hoursEnd, 5), hours: clean(d.hours, 40), tone: clean(d.tone, 200), seed: clean(d.seed, 1000), medal: clean(d.medal, 40), theme: clean(d.theme, 30) },
       档期: clean(d.hours, 40) || '不固定', 牌子名: clean(d.medal, 40) || handle || name,
       体量档位: scale.tier, 底盘热度: scale.base, 本场热度: 0, 高能榜: [],
       大航海: { 舰长: scale.guards, 提督: scale.admirals, 总督: scale.governors, 名单: [] },
@@ -440,14 +441,20 @@
     const object = stat.对象信息?.[name];
     if (!room || room.自定义 !== true || !object) throw new Error('自定义主播不存在');
     const entries = await currentWorldbookEntries();
-    const openingName = `人物详情 - ${name}`;
-    const profile = entries.find((entry) => clean(entry?.name) === openingName)
-      || entries.find((entry) => clean(entry?.name).startsWith(`${PREFIX}主播人设｜${name}｜`));
+    const profileNames = new Set([`角色详情：${name}`, `人物详情 - ${name}`, name]);
+    const profile = entries.find((entry) => clean(entry?.extra?.linjiangOpening?.sourceName, 80) === name)
+      || entries.find((entry) => profileNames.has(worldbookEntryTitle(entry)))
+      || entries.find((entry) => worldbookEntryTitle(entry).startsWith(`${PREFIX}主播人设｜${name}｜`));
     if (!profile?.content) throw new Error(`没有找到「${name}」的人设世界书正文`);
     const part = room.部位图 || {};
+    const meta = room.创意工坊资料 && typeof room.创意工坊资料 === 'object' ? room.创意工坊资料 : {};
     const data = {
-      name, handle: clean(room.主播网名), age: 23, home: clean(object.位置?.区域), categories: [],
-      tier: Number(room.体量档位 ?? 42), hours: clean(room.档期) || '不固定', tone: '', seed: '', medal: clean(room.牌子名), theme: clean(room.代表色),
+      name, handle: clean(room.主播网名), age: Math.max(18, Math.round(Number(meta.age) || 23)),
+      home: clean(meta.home || object.位置?.区域, 120), homeData: meta.homeData && typeof meta.homeData === 'object' ? meta.homeData : null,
+      categories: Array.isArray(meta.categories) ? meta.categories.map((value) => clean(value, 30)).filter(Boolean).slice(0, 16) : [],
+      tier: Number(room.体量档位 ?? meta.tier ?? 42), hoursStart: clean(meta.hoursStart, 5), hoursEnd: clean(meta.hoursEnd, 5),
+      hours: clean(room.档期 || meta.hours, 40) || '不固定', tone: clean(meta.tone, 200), seed: clean(meta.seed, 1000),
+      medal: clean(room.牌子名 || meta.medal, 40), theme: clean(room.代表色 || meta.theme, 30),
       profileYaml: clean(profile.content, 100000),
       assets: { cover: remote(room.封面), parts: { oral: remote(part.口腔), chest: remote(part.胸部 || part.胸), vagina: remote(part.小穴), anus: remote(part.肛门) } },
     };
