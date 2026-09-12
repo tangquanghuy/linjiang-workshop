@@ -27,6 +27,7 @@
       <button class="active" data-type="streamer"><span>01 / STREAMER</span><b>自定义主播</b></button>
       <button data-type="city_node"><span>02 / CITY NODE</span><b>城市节点</b></button>
       <button data-type="extension"><span>03 / EXTENSION</span><b>拓展内容</b></button>
+      <button data-type="installed"><span>04 / MANAGER</span><b>已安装内容</b></button>
     </nav>
 
     <main class="main-content">
@@ -40,6 +41,10 @@
         <div class="filters"><label class="search-box"><span>⌕</span><input id="search" type="search" placeholder="搜索作品或作者"></label><select id="sort"><option value="recent">最近更新</option><option value="downloads">采用最多</option><option value="likes">喜欢最多</option></select></div>
       </section>
       <section id="grid" class="work-grid" aria-live="polite"></section>
+      <section id="installed-panel" class="installed-panel" hidden>
+        <div class="installed-heading"><div><div class="eyebrow">CURRENT GAME</div><h3>已安装内容</h3><p>管理当前游戏世界书、主播和城市节点中的工坊内容。</p></div><button id="refresh-installed" class="secondary" type="button">刷新列表</button></div>
+        <div id="installed-grid" class="installed-grid" aria-live="polite"></div>
+      </section>
       <div class="pagination-wrap"><small id="pagination-summary" class="pagination-summary"></small><nav id="pagination" class="pagination" aria-label="pagination"></nav></div>
     </main>
 
@@ -66,6 +71,6 @@
 
   <dialog id="wallet-dialog" class="dialog"><div class="dialog-card wallet-card"><button class="dialog-x" data-close="wallet-dialog">×</button><span class="eyebrow">CREATOR WALLET</span><h2>创作代币</h2><div class="wallet-numbers"><div><small>云端可领取</small><b id="cloud-balance">0</b></div><div><small>本浏览器</small><b id="local-balance">0</b></div><div><small>累计获得</small><b id="earned-total">0</b></div></div><p>每位已登录玩家首次成功采用一件作品，为作者结算 1 枚代币；作者自己安装与重复安装不计入。</p><button id="claim-button" class="primary big" type="button">领取到本浏览器</button><output id="wallet-status"></output></div></dialog>
   <div id="toast" class="toast" role="status"></div>
-  <script type="module" src="./app.js?v=extension-group-20260912-v1"></script>
+  <script type="module" src="./app.js?v=manager-close-20260912-v1"></script>
 </body>
 </html>

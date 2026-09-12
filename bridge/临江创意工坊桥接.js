@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         临江创意工坊桥接
 // @namespace    linjiang.workshop
-// @version      0.1.2
+// @version      0.1.3
 // @description  在酒馆内打开临江创意工坊，并负责主播、城市节点、拓展与本地代币写入
 // @match        */*
 // @grant        none
@@ -11,6 +11,7 @@
   'use strict';
 
   const SCRIPT_KEY = '__linjiangWorkshopBridgeV1';
+  const BRIDGE_VERSION = 'bridge-20260912-manager-close-v1';
   if (window[SCRIPT_KEY]) return;
   window[SCRIPT_KEY] = true;
 
@@ -319,16 +320,113 @@
     return { worldbookBase: base, entries: entries.length };
   }
 
+  function worldbookEntryTitle(entry) {
+    return clean(entry?.name || entry?.comment || entry?.title);
+  }
+
+  function parseManagedBase(name, type) {
+    const value = clean(name);
+    const prefix = type === 'streamer' ? `${PREFIX}主播人设｜` : `${PREFIX}拓展｜`;
+    if (!value.startsWith(prefix)) return null;
+    const parts = value.slice(prefix.length).split('｜');
+    if (type === 'streamer') {
+      return { title: clean(parts[0], 80), authorName: cleanLabel(parts[1]) };
+    }
+    return { title: clean(parts[0], 80), authorName: cleanLabel(parts[1]), base: `${prefix}${parts[0]}｜${parts[1]}` };
+  }
+
+  async function listInstalledItems() {
+    const context = readMvu();
+    const stat = context.stat || {};
+    const entries = await currentWorldbookEntries();
+    const output = [];
+    const seen = new Set();
+    const rooms = stat.系统配置?.直播间 || {};
+    const objects = stat.对象信息 || {};
+
+    for (const entry of entries) {
+      const name = worldbookEntryTitle(entry);
+      const parsed = parseManagedBase(name, 'streamer');
+      if (!parsed || seen.has(`streamer:${parsed.title}`) || !rooms[parsed.title] || !objects[parsed.title]) continue;
+      const pkg = await exportStreamer(parsed.title);
+      pkg.authorName = parsed.authorName;
+      output.push({ id: `streamer:${parsed.title}`, itemType: 'streamer', title: parsed.title, authorName: parsed.authorName, package: pkg });
+      seen.add(`streamer:${parsed.title}`);
+    }
+
+    const nodes = stat.系统配置?.地图?.自建节点 || {};
+    for (const [id, row] of Object.entries(nodes)) {
+      const name = clean(row?.名称);
+      if (!name || seen.has(`city_node:${id}`)) continue;
+      const pkg = exportCityNode(id);
+      output.push({ id: `city_node:${id}`, itemType: 'city_node', title: name, authorName: '当前游戏', package: pkg });
+      seen.add(`city_node:${id}`);
+    }
+
+    const extensionGroups = new Map();
+    for (const entry of entries) {
+      const name = worldbookEntryTitle(entry);
+      const parsed = parseManagedBase(name, 'extension');
+      if (!parsed) continue;
+      const key = parsed.base;
+      if (!extensionGroups.has(key)) extensionGroups.set(key, { parsed, rows: [] });
+      extensionGroups.get(key).rows.push(entry);
+    }
+    for (const [base, group] of extensionGroups) {
+      if (seen.has(`extension:${base}`)) continue;
+      const position = group.rows[0]?.position || {};
+      const sections = group.rows.map((entry, index) => {
+        const name = worldbookEntryTitle(entry);
+        const suffix = name.slice(base.length).replace(/^｜/, '');
+        const isBlue = suffix.startsWith('蓝灯') || suffix.includes('总览');
+        const title = suffix.replace(/^(蓝灯|绿灯)-?\d*｜?/, '').replace(/^总览｜?/, '').replace(/^\d+｜?/, '').trim();
+        const keys = Array.isArray(entry?.strategy?.keys) ? entry.strategy.keys : (Array.isArray(entry?.keys) ? entry.keys : []);
+        return { id: `installed-${index + 1}`, kind: isBlue ? 'overview' : 'content', title, content: clean(entry?.content, 100000), triggerWords: isBlue ? [] : keys };
+      }).filter((section) => section.content);
+      const pkg = { schema: 'linjiang.workshop.package', schemaVersion: 1, game: 'linjiang', itemType: 'extension', title: group.parsed.title, summary: '', tags: [], authorName: group.parsed.authorName, data: { sections, position: { type: position.type || 'after_character_definition', depth: Number(position.depth || 0), order: Number(position.order || 420) } } };
+      output.push({ id: `extension:${base}`, itemType: 'extension', title: group.parsed.title, authorName: group.parsed.authorName, package: pkg, entryCount: sections.length });
+      seen.add(`extension:${base}`);
+    }
+    return { items: output };
+  }
+
   async function uninstallItem(item) {
     const pkg = { ...(item.package || {}), authorName: item.authorName || item.package?.authorName };
+    if (pkg.itemType === 'city_node') {
+      const context = readMvu();
+      const id = clean(item.id).replace(/^city_node:/, '') || clean(pkg.data?.id);
+      const nodes = context.stat.系统配置?.地图?.自建节点 || {};
+      const row = nodes[id];
+      if (!row) throw new Error('城市节点不存在');
+      const nodeName = clean(row.名称);
+      delete nodes[id];
+      context.stat.系统配置.地图.自建节点 = nodes;
+      saveMvu(context);
+      let removed = 0;
+      try {
+        await updateWorldbook((entries) => entries.filter((entry) => {
+          const hit = worldbookEntryTitle(entry) === `玩家地点 - ${nodeName}`;
+          if (hit) removed += 1;
+          return !hit;
+        }));
+      } catch (error) { console.warn('[临江工坊] 删除城市节点世界书失败', error); }
+      return { removed, id, name: nodeName };
+    }
     const base = pkg.itemType === 'streamer' ? streamerEntryName(pkg) : pkg.itemType === 'extension' ? extensionEntryBase(pkg) : '';
-    if (!base) throw new Error('城市节点请在地图地点详情中删除');
+    if (!base) throw new Error('作品类型无效');
     let removed = 0;
     await updateWorldbook((entries) => reorderManaged(entries.filter((entry) => {
-      const hit = pkg.itemType === 'streamer' ? clean(entry?.name) === base : clean(entry?.name).startsWith(base);
+      const hit = pkg.itemType === 'streamer' ? worldbookEntryTitle(entry) === base : worldbookEntryTitle(entry).startsWith(base);
       if (hit) removed += 1;
       return !hit;
     })));
+    if (pkg.itemType === 'streamer') {
+      const context = readMvu();
+      const name = clean(pkg.data?.name || item.title);
+      if (context.stat.对象信息) delete context.stat.对象信息[name];
+      if (context.stat.系统配置?.直播间) delete context.stat.系统配置.直播间[name];
+      saveMvu(context);
+    }
     return { removed, base };
   }
 
@@ -396,8 +494,9 @@
 
   async function handleAction(action, payload) {
     switch (action) {
-      case 'handshake': return { label: '临江创意工坊桥接', capabilities: { streamer: true, cityNode: true, extension: true, tokens: true } };
+      case 'handshake': return { label: '临江创意工坊桥接', version: BRIDGE_VERSION, capabilities: { streamer: true, cityNode: true, extension: true, tokens: true, installedManager: true } };
       case 'listPublishSources': return { sources: await listPublishSources(payload.itemType) };
+      case 'listInstalledItems': return listInstalledItems();
       case 'exportPublishSource': return { package: payload.itemType === 'streamer' ? await exportStreamer(payload.sourceId) : exportCityNode(payload.sourceId) };
       case 'installItem': {
         const type = payload.item?.itemType || payload.item?.package?.itemType;
@@ -413,23 +512,68 @@
     }
   }
 
+  function closeWorkshopPanel(panel = null, event = null) {
+    event?.preventDefault();
+    event?.stopPropagation();
+    const target = panel || hostDocument().getElementById(PANEL_ID);
+    if (target) {
+      target.classList.remove('open');
+      target.setAttribute('aria-hidden', 'true');
+    }
+    const floating = hostDocument().getElementById(`${PANEL_ID}-close`);
+    floating?.classList.remove('open');
+  }
+
   function ensurePanel() {
     const doc = hostDocument();
     let panel = doc.getElementById(PANEL_ID);
-    if (panel) return panel;
-    const style = doc.createElement('style');
-    style.textContent = `#${PANEL_ID}{position:fixed;inset:0;z-index:2147483000;display:none;background:rgba(2,4,10,.72);backdrop-filter:blur(8px)}#${PANEL_ID}.open{display:block}#${PANEL_ID} iframe{position:absolute;inset:3vh 3vw;width:94vw;height:94vh;border:1px solid rgba(220,232,255,.25);border-radius:20px;background:#080b15;box-shadow:0 28px 100px #000}#${PANEL_ID} .ljw-close{position:absolute;right:calc(3vw + 12px);top:calc(3vh + 10px);z-index:2;width:38px;height:38px;border:1px solid rgba(255,255,255,.2);border-radius:12px;background:rgba(10,14,26,.86);color:#fff;font-size:25px;cursor:pointer}@media(max-width:700px){#${PANEL_ID} iframe{inset:0;width:100vw;height:100vh;border:0;border-radius:0}#${PANEL_ID} .ljw-close{right:10px;top:10px}}`;
-    doc.head.appendChild(style);
-    panel = doc.createElement('div');
-    panel.id = PANEL_ID;
-    panel.innerHTML = `<button class="ljw-close" type="button" aria-label="关闭">×</button><iframe title="临江创意工坊" src="${esc(TARGET_URL)}" allow="clipboard-read; clipboard-write"></iframe>`;
-    doc.body.appendChild(panel);
-    panel.querySelector('.ljw-close').onclick = () => panel.classList.remove('open');
-    panel.addEventListener('click', (event) => { if (event.target === panel) panel.classList.remove('open'); });
+    if (!doc.getElementById(`${PANEL_ID}-style`)) {
+      const style = doc.createElement('style');
+      style.id = `${PANEL_ID}-style`;
+      style.textContent = `#${PANEL_ID}{position:fixed;inset:0;z-index:2147483000;display:none;pointer-events:none;background:rgba(2,4,10,.72);backdrop-filter:blur(8px)}#${PANEL_ID}.open{display:block;pointer-events:auto}#${PANEL_ID} iframe{position:absolute;inset:3vh 3vw;width:94vw;height:94vh;z-index:0;border:1px solid rgba(220,232,255,.25);border-radius:20px;background:#080b15;box-shadow:0 28px 100px #000}#${PANEL_ID} .ljw-close{display:none}#${PANEL_ID}-close{position:fixed;display:none;right:calc(3vw + 12px);top:calc(3vh + 10px);z-index:2147483647;width:44px;height:44px;border:1px solid rgba(255,255,255,.42);border-radius:12px;background:rgba(10,14,26,.96);color:#fff;font-size:27px;line-height:1;cursor:pointer;pointer-events:auto;touch-action:manipulation;place-items:center;box-shadow:0 8px 24px rgba(0,0,0,.42)}#${PANEL_ID}-close.open{display:grid}@media(max-width:700px){#${PANEL_ID} iframe{inset:0;width:100vw;height:100vh;border:0;border-radius:0}#${PANEL_ID}-close{right:10px;top:10px}}`;
+      doc.head.appendChild(style);
+    }
+    if (!panel) {
+      panel = doc.createElement('div');
+      panel.id = PANEL_ID;
+      panel.setAttribute('aria-hidden', 'true');
+      panel.innerHTML = `<iframe title="临江创意工坊" src="${esc(TARGET_URL)}" allow="clipboard-read; clipboard-write"></iframe>`;
+      doc.body.appendChild(panel);
+      panel.addEventListener('click', (event) => { if (event.target === panel) closeWorkshopPanel(panel, event); });
+    }
+    let closeButton = doc.getElementById(`${PANEL_ID}-close`);
+    if (!closeButton) {
+      closeButton = doc.createElement('button');
+      closeButton.id = `${PANEL_ID}-close`;
+      closeButton.className = 'ljw-close-floating';
+      closeButton.type = 'button';
+      closeButton.setAttribute('aria-label', '关闭创意工坊');
+      closeButton.textContent = '×';
+      doc.body.appendChild(closeButton);
+    }
+    if (closeButton.dataset.bound !== 'true') {
+      const handler = (event) => closeWorkshopPanel(panel, event);
+      closeButton.addEventListener('pointerdown', handler, true);
+      closeButton.addEventListener('click', handler, true);
+      closeButton.dataset.bound = 'true';
+    }
+    const oldCloseButton = panel.querySelector('.ljw-close');
+    if (oldCloseButton && oldCloseButton.dataset.bound !== 'true') {
+      const handler = (event) => closeWorkshopPanel(panel, event);
+      oldCloseButton.addEventListener('pointerdown', handler, true);
+      oldCloseButton.addEventListener('click', handler, true);
+      oldCloseButton.dataset.bound = 'true';
+    }
     return panel;
   }
 
-  function openPanel() { ensurePanel().classList.add('open'); }
+  function openPanel() {
+    const panel = ensurePanel();
+    panel.classList.add('open');
+    panel.setAttribute('aria-hidden', 'false');
+    hostDocument().getElementById(`${PANEL_ID}-close`)?.classList.add('open');
+  }
+
   function setupMessages() {
     const host = hostWindow();
     host.addEventListener('message', async (event) => {
@@ -492,6 +636,6 @@
     const core = wins().find((win) => typeof win.eventOn === 'function' && typeof win.getButtonEvent === 'function');
     if (core) core.eventOn(core.getButtonEvent(BUTTON_EVENT_NAME), openPanel);
   } catch {}
-  hostWindow().LinjiangWorkshop = { open: openPanel, close: () => hostDocument().getElementById(PANEL_ID)?.classList.remove('open') };
+  hostWindow().LinjiangWorkshop = { open: openPanel, close: () => closeWorkshopPanel() };
   console.info('[临江创意工坊] 桥接已加载，调用 LinjiangWorkshop.open() 可打开面板');
 })();

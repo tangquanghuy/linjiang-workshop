@@ -5,7 +5,7 @@ const USED_CLAIMS_KEY = 'linjiang_workshop_used_claims_v1';
 const BRIDGE_CHANNEL = 'linjiang-workshop:bridge';
 const WORKSHOP_MODE = new URLSearchParams(location.search).get('mode') || '';
 const SELECT_STREAMER_MODE = WORKSHOP_MODE === 'select-streamer';
-const TYPE_LABEL = { streamer: '自定义主播', city_node: '城市节点', extension: '拓展' };
+const TYPE_LABEL = { streamer: '自定义主播', city_node: '城市节点', extension: '拓展', installed: '已安装内容' };
 
 const state = {
   type: 'streamer',
@@ -17,6 +17,8 @@ const state = {
   publishPackage: null,
   gameSources: [],
   extensionSections: [],
+  installedItems: [],
+  installedLoading: false,
   page: 1,
   pageSize: 12,
   total: 0,
@@ -316,6 +318,84 @@ function paintPagination() {
   node.innerHTML = `<button type="button" class="pagination-arrow" data-page="${state.page - 1}" ${state.page <= 1 ? 'disabled' : ''}>\u4e0a\u4e00\u9875</button>${parts.join('')}<button type="button" class="pagination-arrow" data-page="${state.page + 1}" ${state.page >= state.totalPages ? 'disabled' : ''}>\u4e0b\u4e00\u9875</button>`;
 }
 
+function syncArchiveView() {
+  const installed = state.type === 'installed';
+  $('#grid')?.classList.toggle('archive-hidden', installed);
+  $('.pagination-wrap')?.classList.toggle('archive-hidden', installed);
+  $('#installed-panel')?.toggleAttribute('hidden', !installed);
+}
+
+function installedTypeLabel(type) {
+  return TYPE_LABEL[type] || '已安装内容';
+}
+
+function renderInstalledItems() {
+  const container = $('#installed-grid');
+  if (!container) return;
+  if (state.installedLoading) {
+    container.innerHTML = '<div class="installed-empty">正在读取当前游戏内容…</div>';
+    return;
+  }
+  if (!state.bridge.available) {
+    container.innerHTML = '<div class="installed-empty">当前是独立网页模式，连接酒馆后才能管理已安装内容。</div>';
+    return;
+  }
+  if (!state.installedItems.length) {
+    container.innerHTML = '<div class="installed-empty">当前游戏还没有检测到工坊安装内容。</div>';
+    return;
+  }
+  container.innerHTML = state.installedItems.map((item) => {
+    const type = item.itemType || 'extension';
+    const typeIcon = type === 'streamer' ? '♢' : type === 'city_node' ? '⌖' : '✦';
+    const detail = type === 'extension'
+      ? `${Number(item.entryCount || item.package?.data?.sections?.length || 0)} 个世界书条目`
+      : type === 'city_node'
+        ? '当前地图节点'
+        : '主播变量 + 人设世界书';
+    return `<article class="installed-card" data-installed-id="${esc(item.id)}">
+      <div class="installed-card-top"><div class="installed-card-title"><h4>${esc(item.title || '未命名内容')}</h4><p>${esc(item.authorName || '当前游戏')}</p></div><span class="installed-type ${esc(type)}">${typeIcon} ${esc(installedTypeLabel(type))}</span></div>
+      <div class="installed-card-meta"><span><i>⌁</i> ${esc(detail)}</span>${type === 'extension' ? '<span><i>▦</i> 按作品组管理</span>' : ''}</div>
+      <div class="installed-card-actions"><button type="button" class="secondary" data-installed-action="detail">查看</button><button type="button" class="secondary installed-uninstall" data-installed-action="uninstall">卸载</button></div>
+    </article>`;
+  }).join('');
+}
+
+async function loadInstalledItems() {
+  syncArchiveView();
+  if (!state.bridge.available) {
+    state.installedItems = [];
+    renderInstalledItems();
+    return;
+  }
+  state.installedLoading = true;
+  renderInstalledItems();
+  try {
+    const result = await bridgeRequest('listInstalledItems', {}, 15000);
+    state.installedItems = Array.isArray(result?.items) ? result.items : [];
+    status.textContent = `当前游戏已安装 ${state.installedItems.length} 项工坊内容`;
+  } catch (error) {
+    state.installedItems = [];
+    status.textContent = `读取已安装内容失败：${error.message}`;
+    toast(error.message);
+  } finally {
+    state.installedLoading = false;
+    renderInstalledItems();
+  }
+}
+
+async function uninstallInstalledItem(item) {
+  if (!item) return;
+  const label = item.itemType === 'extension' ? '拓展及其全部世界书条目' : item.itemType === 'city_node' ? '城市节点及对应世界书条目' : '主播变量及其人设世界书';
+  if (!window.confirm(`确定卸载「${item.title}」？\n将删除${label}。`)) return;
+  try {
+    const result = await bridgeRequest('uninstallItem', { item }, item.itemType === 'city_node' ? 20000 : 12000);
+    toast(`已卸载「${item.title}」，删除 ${Number(result?.removed || 0)} 个世界书条目`);
+    await loadInstalledItems();
+  } catch (error) {
+    toast(`卸载失败：${error.message}`);
+  }
+}
+
 function sendSelectionToParent(item) {
   if (window.parent === window) return false;
   const target = item?.package || item;
@@ -610,9 +690,21 @@ function syncTabs() {
 $('#tabs').addEventListener('click', (event) => {
   const button = event.target.closest('[data-type]');
   if (!button) return;
-  state.type = button.dataset.type; state.page = 1; syncTabs(); loadItems();
+  state.type = button.dataset.type; state.page = 1; syncTabs(); syncArchiveView();
+  if (state.type === 'installed') loadInstalledItems();
+  else loadItems();
 });
 $('#grid').addEventListener('click', (event) => { const card = event.target.closest('[data-item-id]'); if (card) openDetail(state.items.find((item) => item.id === card.dataset.itemId)); });
+$('#installed-grid').addEventListener('click', (event) => {
+  const card = event.target.closest('[data-installed-id]');
+  const action = event.target.closest('[data-installed-action]')?.dataset.installedAction;
+  if (!card || !action) return;
+  const item = state.installedItems.find((entry) => entry.id === card.dataset.installedId);
+  if (action === 'detail') openDetail(item);
+  if (action === 'uninstall') uninstallInstalledItem(item);
+});
+$('#refresh-installed').addEventListener('click', () => loadInstalledItems());
+
 $('#detail-content').addEventListener('click', (event) => {
   const action = event.target.closest('[data-detail-action]')?.dataset.detailAction;
   if (action === 'select') {
@@ -667,4 +759,5 @@ document.querySelectorAll('dialog.dialog').forEach((dialog) => dialog.addEventLi
 function debounce(fn, wait) { let timer; return (...args) => { clearTimeout(timer); timer = setTimeout(() => fn(...args), wait); }; }
 
 await Promise.all([detectBridge(), refreshAuth()]);
+syncArchiveView();
 await loadItems();
