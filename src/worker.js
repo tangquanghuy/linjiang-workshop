@@ -271,6 +271,34 @@ async function createItem(request, env) {
   let pkg;
   try { pkg = normalizePackage(body, { authorName: auth.user.username }); }
   catch (error) { return json({ ok: false, error: error.message }, 400); }
+
+  const existing = await env.DB.prepare(`
+    SELECT id, status FROM workshop_items
+    WHERE owner_discord_id = ? AND item_type = ? AND title = ?
+    LIMIT 1
+  `).bind(auth.user.discord_id, pkg.itemType, pkg.title).first();
+  if (existing?.status === 'published') return json({ ok: false, error: '你已经发布过同名作品' }, 409);
+
+  if (existing?.id && existing.status === 'deleted') {
+    const results = await env.DB.batch([
+      env.DB.prepare('DELETE FROM item_likes WHERE item_id = ?').bind(existing.id),
+      env.DB.prepare('DELETE FROM install_events WHERE item_id = ?').bind(existing.id),
+      env.DB.prepare(`
+        UPDATE workshop_items SET
+          author_name = ?, summary = ?, tags_json = ?, cover_url = ?, payload_json = ?,
+          schema_version = ?, content_version = content_version + 1,
+          like_count = 0, download_count = 0, status = 'published', updated_at = CURRENT_TIMESTAMP
+        WHERE id = ? AND owner_discord_id = ? AND status = 'deleted'
+      `).bind(
+        pkg.authorName, pkg.summary, JSON.stringify(pkg.tags), pkg.coverUrl, JSON.stringify(pkg),
+        Number(pkg.schemaVersion || 1), existing.id, auth.user.discord_id,
+      ),
+    ]);
+    if (!Number(results?.[2]?.meta?.changes || 0)) return json({ ok: false, error: '作品重新发布失败，请刷新后重试' }, 409);
+    const row = await getItemRow(env.DB, existing.id, auth.user.discord_id);
+    return json({ ok: true, republished: true, item: mapItemRow(row) }, 201);
+  }
+
   const id = crypto.randomUUID();
   try {
     await env.DB.prepare(`
@@ -286,7 +314,7 @@ async function createItem(request, env) {
     throw error;
   }
   const row = await getItemRow(env.DB, id, auth.user.discord_id);
-  return json({ ok: true, item: mapItemRow(row) }, 201);
+  return json({ ok: true, republished: false, item: mapItemRow(row) }, 201);
 }
 
 async function updateItem(request, env, itemId) {
@@ -312,7 +340,7 @@ async function deleteItem(request, env, itemId) {
   const auth = await requireUser(request, env);
   if (auth.response) return auth.response;
   const result = await env.DB.prepare(`
-    UPDATE workshop_items SET status = 'deleted', updated_at = CURRENT_TIMESTAMP
+    DELETE FROM workshop_items
     WHERE id = ? AND owner_discord_id = ? AND status != 'deleted'
   `).bind(itemId, auth.user.discord_id).run();
   if (!Number(result.meta?.changes || 0)) return json({ ok: false, error: '作品不存在或归属不匹配' }, 404);
