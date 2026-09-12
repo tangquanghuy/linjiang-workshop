@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         临江创意工坊桥接
 // @namespace    linjiang.workshop
-// @version      0.1.4
+// @version      0.1.5
 // @description  在酒馆内打开临江创意工坊，并负责主播、城市节点、拓展与本地代币写入
 // @match        */*
 // @grant        none
@@ -11,7 +11,7 @@
   'use strict';
 
   const SCRIPT_KEY = '__linjiangWorkshopBridgeV1';
-  const BRIDGE_VERSION = 'bridge-20260912-free-city-install-v1';
+  const BRIDGE_VERSION = 'bridge-20260912-city-detail-fields-v1';
   if (window[SCRIPT_KEY]) return;
   window[SCRIPT_KEY] = true;
 
@@ -25,7 +25,7 @@
   const END_NAME = '--/Mod结束';
   const START_ORDER = 400;
   const END_ORDER = 500;
-  const MAP_REVISION = '20260823-custom-nodes-v1';
+  const MAP_REVISION = '20260912-custom-location-detail-v1';
 
   const wins = () => {
     const list = [];
@@ -236,20 +236,13 @@
 
   function customMapWorldbookEntry(node) {
     const keys = [...new Set([node.name, ...(node.aliases || [])].map((value) => clean(value, 80)).filter(Boolean))];
-    const flags = [];
-    if (node.features.canDate) flags.push('约会');
-    if (node.features.canGather) flags.push('采集');
-    if (node.features.canWork) flags.push('工作');
-    if (node.features.hasShop) flags.push('商店');
-    const q = (value) => JSON.stringify(String(value ?? ''));
-    const lines = [`${node.name}:`, '  来源: 玩家自建地点', `  区域: ${q(node.district)}`, `  类型: ${q(node.archetype)}`, `  私密度: ${node.privacy}`, `  开放: [${node.openHours.map(q).join(', ')}]`, `  详情: ${q(node.intro)}`, `  看点: ${q(node.draw)}`, `  功能: [${flags.map(q).join(', ')}]`, '  地图接驳:', `    节点: ${q(node.anchorName || node.anchorId)}`, `    步行距离: ${node.accessKm}km`];
-    if (node.special.length) { lines.push('  特殊:'); node.special.forEach((value) => lines.push(`    - ${q(value)}`)); }
+    const detail = clean(node.detail ?? node.intro, 100000);
     return {
-      name: `玩家地点 - ${node.name}`, comment: `玩家地点 - ${node.name}`, enabled: true, keys, key: keys, content: lines.join('\n'),
+      name: `玩家地点 - ${node.name}`, comment: `玩家地点 - ${node.name}`, enabled: true, keys, key: keys, content: detail || node.name,
       strategy: { type: 'selective', keys, keys_secondary: { logic: 'and_any', keys: [] }, scan_depth: 'same_as_global' },
       position: { type: 'after_character_definition', role: 'system', depth: 0, order: 34 }, probability: 100,
       recursion: { prevent_incoming: true, prevent_outgoing: true, delay_until: null }, effect: { sticky: null, cooldown: null, delay: null },
-      extra: { linjiangCustomMapNode: { id: node.id, version: 1 } },
+      extra: { linjiangCustomMapNode: { id: node.id, version: 2 } },
     };
   }
 
@@ -272,7 +265,8 @@
       anchorId: clean(p.anchorId, 80), anchorName: clean(p.anchorName, 80), accessKm: Math.max(0, Number(p.accessKm) || 0),
       archetype: clean(d.archetype, 30) || 'living', privacy: Math.max(0, Math.min(5, Math.round(Number(d.privacy) || 0))),
       openHours: Array.isArray(d.openHours) && d.openHours.length ? d.openHours.slice(0, 5) : ['朝', '昼', '暮', '夜', '深夜'],
-      intro: clean(d.intro, 500), draw: clean(d.draw, 300), special: Array.isArray(d.special) ? d.special.map((value) => clean(value, 120)).filter(Boolean).slice(0, 12) : [],
+      detail: clean(d.detail ?? d.intro, 100000), mapIntro: clean(d.mapIntro ?? d.draw, 300),
+      mapNotes: Array.isArray(d.mapNotes ?? d.special) ? (d.mapNotes ?? d.special).map((value) => clean(value, 120)).filter(Boolean).slice(0, 12) : [],
       features: { canDate: !!d.features?.canDate, canGather: !!d.features?.canGather, canWork: !!d.features?.canWork, hasShop: !!d.features?.hasShop },
       createdAt: `${clean(context.stat.世界信息?.年历, 30)} ${clean(context.stat.世界信息?.时间?.时钟, 10)}`.trim(),
     };
@@ -285,7 +279,7 @@
       名称: node.name, 别名: node.aliases, 区域: node.district, 底板: node.plate, 区内坐标: node.localPos,
       锚点: node.anchorId, 锚点名称: node.anchorName, 接驳距离: node.accessKm, 类型: node.archetype, 私密度: node.privacy,
       开放时段: node.openHours, 功能: { 可约会: node.features.canDate, 可采集: node.features.canGather, 可工作: node.features.canWork, 有商店: node.features.hasShop },
-      简介: node.intro, 看点: node.draw, 特殊: node.special, 创建时间: node.createdAt,
+      详情: node.detail, 地图简介: node.mapIntro, 特殊: node.mapNotes, 创建时间: node.createdAt,
       世界书同步: { 状态: worldbookSynced ? '已同步' : '由地图加载动态注入', 条目UID: null },
     };
     context.stat.系统配置.地图.自建节点 = nodes;
@@ -466,11 +460,12 @@
     const features = row.功能 || {};
     const data = {
       name: clean(row.名称), aliases: Array.isArray(row.别名) ? row.别名 : [], district: clean(row.区域), archetype: clean(row.类型) || 'living', privacy: Number(row.私密度 || 0),
-      openHours: Array.isArray(row.开放时段) ? row.开放时段 : ['朝', '昼', '暮', '夜', '深夜'], intro: clean(row.简介), draw: clean(row.看点), special: Array.isArray(row.特殊) ? row.特殊 : [],
+      openHours: Array.isArray(row.开放时段) ? row.开放时段 : ['朝', '昼', '暮', '夜', '深夜'],
+      detail: clean(row.详情 ?? row.简介, 100000), mapIntro: clean(row.地图简介 ?? row.看点, 300), mapNotes: Array.isArray(row.地图备注 ?? row.特殊) ? (row.地图备注 ?? row.特殊) : [],
       features: { canDate: !!features.可约会, canGather: !!features.可采集, canWork: !!features.可工作, hasShop: !!features.有商店 },
       placement: { mapRevision: MAP_REVISION, plate: clean(row.底板), localPos: Array.isArray(row.区内坐标) ? row.区内坐标.slice(0, 2) : [], anchorId: clean(row.锚点), anchorName: clean(row.锚点名称), accessKm: Number(row.接驳距离 || 0) },
     };
-    return { schema: 'linjiang.workshop.package', schemaVersion: 1, game: 'linjiang', itemType: 'city_node', title: data.name, summary: data.intro, tags: [data.district, data.archetype].filter(Boolean), coverUrl: '', data };
+    return { schema: 'linjiang.workshop.package', schemaVersion: 1, game: 'linjiang', itemType: 'city_node', title: data.name, summary: data.mapIntro, tags: [data.district, data.archetype].filter(Boolean), coverUrl: '', data };
   }
 
   function claimTokens(claim) {

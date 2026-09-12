@@ -1,4 +1,4 @@
-﻿import test from 'node:test';
+import test from 'node:test';
 import assert from 'node:assert/strict';
 import { normalizePackage, streamScale, workshopWorldbookBase } from '../src/contracts.js';
 
@@ -51,4 +51,34 @@ test('拓展允许多个蓝灯和绿灯条目，但每个绿灯都需要触发�
     title: '缺少触发词',
     data: { sections: [{ kind: 'content', content: '正文', triggerWords: [] }] },
   }, { authorName: '作者戊' }), /每个绿灯条目至少填写一个触发词/);
+});
+
+test('城市节点使用完整地点详情并区分地图专用字段', () => {
+  const detail = Array.from({ length: 180 }, (_, index) => `区域_${index}: 这是一段完整地点设定`).join('\n');
+  assert.ok(detail.length > 500);
+  const pkg = normalizePackage({
+    itemType: 'city_node',
+    title: '长设定地点',
+    data: {
+      name: '长设定地点', detail, mapIntro: '地图上的简短说明', mapNotes: ['只在夜间开放'],
+      features: { canDate: true, hasShop: true },
+      placement: { plate: 'pujiang', localPos: [0.4, 0.6] },
+    },
+  }, { authorName: '作者己' });
+  assert.equal(pkg.data.detail, detail);
+  assert.equal(pkg.data.mapIntro, '地图上的简短说明');
+  assert.deepEqual(pkg.data.mapNotes, ['只在夜间开放']);
+  assert.equal('intro' in pkg.data, false);
+  assert.equal('draw' in pkg.data, false);
+  assert.equal('special' in pkg.data, false);
+});
+
+test('城市节点旧字段导入后转换为新字段', () => {
+  const pkg = normalizePackage({
+    itemType: 'city_node', title: '旧格式地点',
+    data: { name: '旧格式地点', intro: '旧详情', draw: '旧地图简介', special: ['旧备注'], placement: { plate: 'wuxi', localPos: [0.2, 0.3] } },
+  }, { authorName: '作者庚' });
+  assert.equal(pkg.data.detail, '旧详情');
+  assert.equal(pkg.data.mapIntro, '旧地图简介');
+  assert.deepEqual(pkg.data.mapNotes, ['旧备注']);
 });

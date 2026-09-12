@@ -457,6 +457,9 @@ function openDetail(item) {
   const data = pkg.data || {};
   const profile = item.itemType === 'streamer' ? String(data.profileYaml || data.yaml || '').trim() : '';
   const extensionSections = item.itemType === 'extension' ? normalizeExtensionSections(data.sections || []) : [];
+  const cityDetail = item.itemType === 'city_node' ? String(data.detail ?? data.intro ?? '').trim() : '';
+  const cityMapIntro = item.itemType === 'city_node' ? String(data.mapIntro ?? data.draw ?? '').trim() : '';
+  const cityMapNotes = item.itemType === 'city_node' && Array.isArray(data.mapNotes ?? data.special) ? (data.mapNotes ?? data.special).filter(Boolean) : [];
   const specifics = item.itemType === 'streamer'
     ? (data.handle && data.handle !== data.name ? `<p>主播网名 · ${esc(data.handle)}</p>` : '')
     : item.itemType === 'city_node'
@@ -468,6 +471,9 @@ function openDetail(item) {
   const extensionDetails = item.itemType === 'extension'
     ? `<section class="detail-section extension-detail-section"><div class="section-heading"><i>✦</i> 世界书条目组</div>${extensionDetailMarkup(item)}</section>`
     : '';
+  const cityDetails = item.itemType === 'city_node'
+    ? `${cityDetail ? `<details class="detail-section city-detail-section" open><summary><span>地点详情</span><small>世界书正文</small></summary><pre>${esc(cityDetail)}</pre></details>` : ''}${cityMapIntro || cityMapNotes.length ? `<section class="city-map-only"><div class="section-heading"><i>⌖</i> 地图显示资料 <small>不写入世界书正文</small></div>${cityMapIntro ? `<p>${esc(cityMapIntro)}</p>` : ''}${cityMapNotes.length ? `<ul>${cityMapNotes.map((note) => `<li>${esc(note)}</li>`).join('')}</ul>` : ''}</section>` : ''}`
+    : '';
   $('#detail-content').innerHTML = `
     ${item.coverUrl ? `<img class="detail-cover" src="${esc(item.coverUrl)}" alt="">` : ''}
     <span class="eyebrow">${TYPE_LABEL[item.itemType]}</span><h2>${esc(item.title)}</h2>
@@ -475,6 +481,7 @@ function openDetail(item) {
     <div class="detail-metrics"><div class="metric metric-author"><i class="metric-icon author-icon" aria-hidden="true">✎</i><span><small>作者</small><b>${esc(item.authorName || '匿名作者')}</b></span></div><div class="metric metric-like"><i class="metric-icon" aria-hidden="true">${item.liked ? '♥' : '♡'}</i><span><small>喜欢</small><b>${item.likeCount || 0}</b></span></div><div class="metric metric-adopt"><i class="metric-icon" aria-hidden="true">⇩</i><span><small>采用</small><b>${item.downloadCount || 0}</b></span></div></div>
     <div class="detail-specifics">${specifics}</div>
     ${extensionDetails}
+    ${cityDetails}
     ${persona}
     <div class="tags">${renderTags(item)}</div>
     <div class="detail-actions">

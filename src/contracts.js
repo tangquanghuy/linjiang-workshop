@@ -98,9 +98,9 @@ function normalizeCityNode(data = {}) {
     archetype: text(data.archetype || 'living', 30) || 'living',
     privacy: Math.round(clamp(data.privacy, 0, 5)),
     openHours: list(data.openHours?.length ? data.openHours : ['朝', '昼', '暮', '夜', '深夜'], 5, 10),
-    intro: text(data.intro, 500),
-    draw: text(data.draw, 300),
-    special: list(data.special, 12, 120),
+    detail: text(data.detail ?? data.intro, 100000),
+    mapIntro: text(data.mapIntro ?? data.draw, 300),
+    mapNotes: list(data.mapNotes ?? data.special, 12, 120),
     features: {
       canDate: !!features.canDate,
       canGather: !!features.canGather,
