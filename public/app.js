@@ -447,6 +447,10 @@ async function selectStreamerToOpening() {
   toast(`已发送主播到开局页 · ${reason}`);
 }
 
+function isOwnPublishedItem(item) {
+  return !!item?.id && !!state.user?.id && item.ownerId === state.user.id && !String(item.id).includes(':');
+}
+
 function openDetail(item) {
   state.selected = item;
   const pkg = item.package || {};
@@ -481,6 +485,7 @@ function openDetail(item) {
       <div class="detail-utility-actions">
         <button class="utility-button like-button ${item.liked ? 'is-liked' : ''}" data-detail-action="like" aria-pressed="${item.liked ? 'true' : 'false'}"><span class="like-icon" aria-hidden="true">${item.liked ? '♥' : '♡'}</span><span>${item.liked ? '取消喜欢' : '喜欢'}</span><b>${item.likeCount || 0}</b></button>
         <button class="utility-button" data-detail-action="download">⇩ 导出 JSON</button>
+        ${isOwnPublishedItem(item) ? '<button class="utility-button delete-published-button" data-detail-action="delete-published">删除作品</button>' : ''}
       </div>
     </div>`;
   $('#detail-dialog').showModal();
@@ -512,6 +517,21 @@ function downloadSelected() {
   link.href = `${API}/items/${encodeURIComponent(state.selected.id)}/download`;
   link.download = `${state.selected.title}.json`;
   link.click();
+}
+
+async function deletePublishedItem() {
+  const item = state.selected;
+  if (!isOwnPublishedItem(item)) return;
+  if (!window.confirm(`确定从创意工坊删除「${item.title}」？\n删除后将不再公开展示，但不会自动卸载玩家已经写入游戏的内容。`)) return;
+  try {
+    await api(`/items/${encodeURIComponent(item.id)}`, { method: 'DELETE' });
+    $('#detail-dialog').close();
+    toast(`已删除作品「${item.title}」`);
+    if (state.items.length === 1 && state.page > 1) state.page -= 1;
+    await loadItems(state.page);
+  } catch (error) {
+    toast(`删除失败：${error.message}`);
+  }
 }
 
 async function toggleLike() {
@@ -714,6 +734,7 @@ $('#detail-content').addEventListener('click', (event) => {
   if (action === 'install') installSelected();
   if (action === 'download') downloadSelected();
   if (action === 'like') toggleLike();
+  if (action === 'delete-published') deletePublishedItem();
 });
 $('#publish-button').addEventListener('click', openPublish);
 $('#login-button').addEventListener('click', () => beginLogin().catch((error) => toast(error.message)));
