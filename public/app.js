@@ -33,6 +33,19 @@ const CITY_ARCHETYPE_LABEL = Object.freeze({
 });
 const cityArchetypeLabel = (value) => CITY_ARCHETYPE_LABEL[String(value || '').trim().toLowerCase()] || String(value || '').trim();
 const renderTags = (item) => (item.tags || []).map((tag) => `<em>${esc(item.itemType === 'city_node' ? cityArchetypeLabel(tag) : tag)}</em>`).join('');
+const coverDisplayUrl = (value) => {
+  const raw = String(value || '').trim();
+  if (!raw) return '';
+  try {
+    const url = new URL(raw, location.href);
+    const host = url.hostname.toLowerCase();
+    return host === 'i.pximg.net' || host.endsWith('.pximg.net')
+      ? `${API}/image?url=${encodeURIComponent(url.href)}`
+      : url.href;
+  } catch {
+    return raw;
+  }
+};
 const status = $('#status');
 let toastTimer = 0;
 
@@ -289,16 +302,18 @@ async function beginLogin() {
 async function loadItems(page = state.page) {  status.textContent = '\u6b63\u5728\u8bfb\u53d6\u5de5\u574a\u2026\u2026';  try {    const q = new URLSearchParams({ type: state.type, sort: $('#sort').value, page: String(page), pageSize: String(state.pageSize) });    const search = $('#search').value.trim();    if (search) q.set('q', search);    const data = await api(`/items?${q}`);    state.items = data.items || [];    state.page = Number(data.page || page) || 1;    state.pageSize = Number(data.pageSize || state.pageSize) || 12;    state.total = Number(data.total || state.items.length) || 0;    state.totalPages = Number(data.totalPages || Math.max(1, Math.ceil(state.total / state.pageSize))) || 1;    paintItems();    paintPagination();    const first = state.total ? ((state.page - 1) * state.pageSize + 1) : 0;    const last = state.total ? Math.min(state.total, state.page * state.pageSize) : 0;    status.textContent = state.total ? `\u6d4f\u89c8${TYPE_LABEL[state.type]}` : `\u8fd8\u6ca1\u6709${TYPE_LABEL[state.type]}\u4f5c\u54c1`;  } catch (error) {    status.textContent = `\u8bfb\u53d6\u5931\u8d25\uff1a${error.message}`;    state.total = 0; state.totalPages = 0;    $('#grid').innerHTML = '<div class="empty">\u5de5\u574a\u6682\u65f6\u6ca1\u6709\u8fd4\u56de\u5185\u5bb9</div>';    paintPagination();  }}function paintItems() {
   const grid = $('#grid');
   if (!state.items.length) {
-    grid.innerHTML = `<div class="empty">\u8fd9\u91cc\u8fd8\u6ca1\u6709${TYPE_LABEL[state.type]}\u4f5c\u54c1\u3002\u767b\u5f55\u540e\u53d1\u5e03\u7b2c\u4e00\u4ef6\u5427</div>`;
+    grid.innerHTML = `<div class="empty">这里还没有${TYPE_LABEL[state.type]}作品。登录后发布第一件吧</div>`;
     return;
   }
-  grid.innerHTML = state.items.map((item) => `
-    <article class="work-card" data-item-id="${esc(item.id)}">
-      <div class="cover">${item.coverUrl ? `<img src="${esc(item.coverUrl)}" alt="" loading="lazy" data-hide-on-error>` : `<div class="cover-fallback">${item.itemType === 'streamer' ? '\u2662' : item.itemType === 'city_node' ? '\u2316' : '\u2726'}</div>`}<span class="type-badge">${TYPE_LABEL[item.itemType]}</span></div>
-      <div class="card-body"><h3>${esc(item.title)}</h3><p>${esc(item.summary || '\u4f5c\u8005\u6ca1\u6709\u586b\u5199\u7b80\u4ecb')}</p>
+  grid.innerHTML = state.items.map((item) => {
+    const coverUrl = coverDisplayUrl(item.coverUrl);
+    return `<article class="work-card" data-item-id="${esc(item.id)}">
+      <div class="cover">${coverUrl ? `<img src="${esc(coverUrl)}" alt="" loading="lazy" referrerpolicy="no-referrer" data-hide-on-error>` : `<div class="cover-fallback">${item.itemType === 'streamer' ? '♢' : item.itemType === 'city_node' ? '⌖' : '✦'}</div>`}<span class="type-badge">${TYPE_LABEL[item.itemType]}</span></div>
+      <div class="card-body"><h3>${esc(item.title)}</h3><p>${esc(item.summary || '作者没有填写简介')}</p>
       <div class="tags">${renderTags(item)}</div>
-      <div class="card-meta"><span class="card-author"><i class="meta-icon author-icon" aria-hidden="true">\u270e</i><b>${esc(item.authorName || '\u533f\u540d\u4f5c\u8005')}</b></span><span class="card-stat like-stat"><i class="meta-icon" aria-hidden="true">${item.liked ? '\u2665' : '\u2661'}</i><b>${item.likeCount || 0}</b></span><span class="card-stat adopt-stat"><i class="meta-icon" aria-hidden="true">\u21e9</i><b>${item.downloadCount || 0}</b></span></div></div>
-    </article>`).join('');
+      <div class="card-meta"><span class="card-author"><i class="meta-icon author-icon" aria-hidden="true">✎</i><b>${esc(item.authorName || '匿名作者')}</b></span><span class="card-stat like-stat"><i class="meta-icon" aria-hidden="true">${item.liked ? '♥' : '♡'}</i><b>${item.likeCount || 0}</b></span><span class="card-stat adopt-stat"><i class="meta-icon" aria-hidden="true">⇩</i><b>${item.downloadCount || 0}</b></span></div></div>
+    </article>`;
+  }).join('');
   grid.querySelectorAll('[data-hide-on-error]').forEach((image) => image.addEventListener('error', () => image.remove()));
 }
 
@@ -455,6 +470,7 @@ function openDetail(item) {
   state.selected = item;
   const pkg = item.package || {};
   const data = pkg.data || {};
+  const detailCoverUrl = coverDisplayUrl(item.coverUrl);
   const profile = item.itemType === 'streamer' ? String(data.profileYaml || data.yaml || '').trim() : '';
   const extensionSections = item.itemType === 'extension' ? normalizeExtensionSections(data.sections || []) : [];
   const cityDetail = item.itemType === 'city_node' ? String(data.detail ?? data.intro ?? '').trim() : '';
@@ -475,7 +491,7 @@ function openDetail(item) {
     ? `${cityDetail ? `<details class="detail-section city-detail-section" open><summary><span>地点详情</span><small>世界书正文</small></summary><pre>${esc(cityDetail)}</pre></details>` : ''}${cityMapIntro || cityMapNotes.length ? `<section class="city-map-only"><div class="section-heading"><i>⌖</i> 地图显示资料 <small>不写入世界书正文</small></div>${cityMapIntro ? `<p>${esc(cityMapIntro)}</p>` : ''}${cityMapNotes.length ? `<ul>${cityMapNotes.map((note) => `<li>${esc(note)}</li>`).join('')}</ul>` : ''}</section>` : ''}`
     : '';
   $('#detail-content').innerHTML = `
-    ${item.coverUrl ? `<img class="detail-cover" src="${esc(item.coverUrl)}" alt="">` : ''}
+    ${detailCoverUrl ? `<img class="detail-cover" src="${esc(detailCoverUrl)}" alt="" referrerpolicy="no-referrer">` : ''}
     <span class="eyebrow">${TYPE_LABEL[item.itemType]}</span><h2>${esc(item.title)}</h2>
     <p class="detail-summary">${esc(item.summary || '作者没有填写简介')}</p>
     <div class="detail-metrics"><div class="metric metric-author"><i class="metric-icon author-icon" aria-hidden="true">✎</i><span><small>作者</small><b>${esc(item.authorName || '匿名作者')}</b></span></div><div class="metric metric-like"><i class="metric-icon" aria-hidden="true">${item.liked ? '♥' : '♡'}</i><span><small>喜欢</small><b>${item.likeCount || 0}</b></span></div><div class="metric metric-adopt"><i class="metric-icon" aria-hidden="true">⇩</i><span><small>采用</small><b>${item.downloadCount || 0}</b></span></div></div>

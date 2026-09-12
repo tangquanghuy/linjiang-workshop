@@ -11,7 +11,8 @@ export default {
     if (!url.pathname.startsWith('/api/')) return env.ASSETS.fetch(request);
 
     try {
-      if (url.pathname === '/api/health') return json({ ok: true, project: 'linjiang-workshop', date: '2026-09-10' });
+      if (url.pathname === '/api/health') return json({ ok: true, project: 'linjiang-workshop', date: '2026-09-12' });
+      if (url.pathname === '/api/image' && request.method === 'GET') return proxyImage(request);
       if (!env.DB) return json({ ok: false, error: 'D1 binding DB is missing' }, 500);
 
       if (url.pathname === '/api/auth/config' && request.method === 'GET') {
@@ -48,6 +49,53 @@ export default {
     }
   },
 };
+
+function pixivImageUrl(value) {
+  try {
+    const url = new URL(String(value || ''));
+    if (url.protocol !== 'https:' || url.username || url.password || url.port) return null;
+    const host = url.hostname.toLowerCase();
+    if (host !== 'i.pximg.net' && !host.endsWith('.pximg.net')) return null;
+    return url;
+  } catch {
+    return null;
+  }
+}
+
+async function proxyImage(request) {
+  const requestUrl = new URL(request.url);
+  const target = pixivImageUrl(requestUrl.searchParams.get('url'));
+  if (!target) return new Response('图片地址无效', { status: 400 });
+  let upstream;
+  try {
+    upstream = await fetch(target.href, {
+      headers: {
+        accept: 'image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8',
+        referer: 'https://www.pixiv.net/',
+        'user-agent': 'Mozilla/5.0 (compatible; LinjiangWorkshopImageProxy/1.0)',
+      },
+      redirect: 'follow',
+      cf: { cacheEverything: true, cacheTtl: 604800 },
+    });
+  } catch (error) {
+    console.warn('[linjiang-workshop] Pixiv image proxy fetch failed', target.hostname, error);
+    return new Response('图片源站连接失败', { status: 502 });
+  }
+  const contentType = upstream.headers.get('content-type') || '';
+  if (!upstream.ok || !contentType.toLowerCase().startsWith('image/')) {
+    return new Response(`图片源站返回 ${upstream.status}`, { status: 502 });
+  }
+  const headers = new Headers({
+    'content-type': contentType,
+    'cache-control': 'public, max-age=86400, s-maxage=604800, stale-while-revalidate=86400',
+    'x-content-type-options': 'nosniff',
+  });
+  for (const name of ['content-length', 'etag', 'last-modified']) {
+    const value = upstream.headers.get(name);
+    if (value) headers.set(name, value);
+  }
+  return new Response(upstream.body, { status: 200, headers });
+}
 
 async function startDiscordAuth(request, env) {
   if (!env.DISCORD_CLIENT_ID || !env.DISCORD_CLIENT_SECRET) return json({ ok: false, error: 'Discord OAuth 尚未配置' }, 503);
