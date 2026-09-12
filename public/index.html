@@ -53,7 +53,7 @@
 
   <dialog id="detail-dialog" class="dialog"><div class="dialog-card detail-card"><button class="dialog-x" data-close="detail-dialog">×</button><div id="detail-content"></div></div></dialog>
   <dialog id="publish-dialog" class="dialog"><form id="publish-form" class="dialog-card publish-card" method="dialog"><button class="dialog-x" type="button" data-close="publish-dialog">×</button>
-    <span class="eyebrow">PUBLISH</span><h2>发布到临江创意工坊</h2>
+    <span class="eyebrow" id="publish-eyebrow">PUBLISH</span><h2 id="publish-dialog-title">发布到临江创意工坊</h2>
     <div id="publish-source" class="publish-source"><button id="read-game-source" type="button" class="secondary">读取当前游戏</button><label class="file-button">导入 JSON<input id="publish-file" type="file" accept="application/json,.json"></label></div>
     <label>作品类型<select id="publish-type"><option value="streamer">自定义主播</option><option value="city_node">城市节点</option><option value="extension">拓展</option></select></label>
     <label id="local-source-row" hidden>选择要发布的内容<select id="local-source"></select></label>
@@ -65,12 +65,12 @@
       <div class="extension-editor-heading"><div><b>世界书条目组</b><small>一组拓展可以包含多个蓝灯条目和多个绿灯条目，每个条目都会独立写入世界书。</small></div><div class="extension-editor-actions"><button id="add-blue-entry" type="button" class="secondary">＋ 蓝灯条目</button><button id="add-green-entry" type="button" class="secondary">＋ 绿灯条目</button></div></div>
       <div id="extension-sections"></div>
     </div>
-    <details id="package-preview"><summary>作品包预览</summary><textarea id="publish-json" rows="12" spellcheck="false"></textarea></details><output id="publish-status"></output>
+    <details id="package-preview"><summary>作品包内容（可编辑 JSON）</summary><textarea id="publish-json" rows="12" spellcheck="false"></textarea></details><output id="publish-status"></output>
     <div class="dialog-actions"><button type="button" class="secondary" data-close="publish-dialog">取消</button><button id="publish-submit" type="submit" class="primary">确认发布</button></div>
   </form></dialog>
 
   <dialog id="wallet-dialog" class="dialog"><div class="dialog-card wallet-card"><button class="dialog-x" data-close="wallet-dialog">×</button><span class="eyebrow">CREATOR WALLET</span><h2>创作代币</h2><div class="wallet-numbers"><div><small>云端可领取</small><b id="cloud-balance">0</b></div><div><small>本浏览器</small><b id="local-balance">0</b></div><div><small>累计获得</small><b id="earned-total">0</b></div></div><p>每位已登录玩家首次成功采用一件作品，为作者结算 1 枚代币；作者自己安装与重复安装不计入。</p><button id="claim-button" class="primary big" type="button">领取到本浏览器</button><output id="wallet-status"></output></div></dialog>
   <div id="toast" class="toast" role="status"></div>
-  <script type="module" src="./app.js?v=pixiv-cover-proxy-20260912-v1"></script>
+  <script type="module" src="./app.js?v=owner-edit-20260912-v2"></script>
 </body>
 </html>

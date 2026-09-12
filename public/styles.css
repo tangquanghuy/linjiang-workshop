@@ -107,5 +107,6 @@ button,input,select,textarea{font:inherit}[hidden]{display:none!important}button
 @media(max-width:980px){.installed-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
 @media(max-width:580px){.installed-heading{display:grid;gap:12px}.installed-heading .secondary{justify-self:start}.installed-grid{grid-template-columns:1fr}}
 
+.edit-published-button{color:#dcecff!important;border-color:rgba(131,201,255,.34)!important;background:rgba(47,128,237,.1)!important}.edit-published-button:hover{color:#fff!important;background:rgba(47,128,237,.24)!important;border-color:rgba(160,216,255,.62)!important}
 .delete-published-button{color:#ffd3de!important;border-color:rgba(255,120,176,.36)!important;background:rgba(255,120,176,.08)!important}.delete-published-button:hover{color:#fff!important;background:rgba(205,66,112,.38)!important;border-color:rgba(255,143,181,.66)!important}
 @media(max-width:580px){.detail-card pre,.detail-section pre{max-height:none;overflow:visible;touch-action:auto}}

@@ -327,11 +327,16 @@ async function updateItem(request, env, itemId) {
   let pkg;
   try { pkg = normalizePackage({ ...body, itemType: existing.item_type }, { authorName: existing.author_name }); }
   catch (error) { return json({ ok: false, error: error.message }, 400); }
-  await env.DB.prepare(`
-    UPDATE workshop_items SET title = ?, summary = ?, tags_json = ?, cover_url = ?, payload_json = ?,
-      content_version = content_version + 1, updated_at = CURRENT_TIMESTAMP
-    WHERE id = ? AND owner_discord_id = ?
-  `).bind(pkg.title, pkg.summary, JSON.stringify(pkg.tags), pkg.coverUrl, JSON.stringify(pkg), itemId, auth.user.discord_id).run();
+  try {
+    await env.DB.prepare(`
+      UPDATE workshop_items SET title = ?, summary = ?, tags_json = ?, cover_url = ?, payload_json = ?,
+        content_version = content_version + 1, updated_at = CURRENT_TIMESTAMP
+      WHERE id = ? AND owner_discord_id = ?
+    `).bind(pkg.title, pkg.summary, JSON.stringify(pkg.tags), pkg.coverUrl, JSON.stringify(pkg), itemId, auth.user.discord_id).run();
+  } catch (error) {
+    if (String(error).includes('UNIQUE')) return json({ ok: false, error: '你已经发布过同名作品' }, 409);
+    throw error;
+  }
   const row = await getItemRow(env.DB, itemId, auth.user.discord_id);
   return json({ ok: true, item: mapItemRow(row) });
 }

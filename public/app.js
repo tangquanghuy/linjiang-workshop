@@ -17,6 +17,8 @@ const state = {
   publishPackage: null,
   gameSources: [],
   extensionSections: [],
+  editingItemId: '',
+  editingItemType: '',
   installedItems: [],
   installedLoading: false,
   page: 1,
@@ -508,7 +510,7 @@ function openDetail(item) {
       <div class="detail-utility-actions">
         <button class="utility-button like-button ${item.liked ? 'is-liked' : ''}" data-detail-action="like" aria-pressed="${item.liked ? 'true' : 'false'}"><span class="like-icon" aria-hidden="true">${item.liked ? '♥' : '♡'}</span><span>${item.liked ? '取消喜欢' : '喜欢'}</span><b>${item.likeCount || 0}</b></button>
         <button class="utility-button" data-detail-action="download">⇩ 导出 JSON</button>
-        ${isOwnPublishedItem(item) ? '<button class="utility-button delete-published-button" data-detail-action="delete-published">删除作品</button>' : ''}
+        ${isOwnPublishedItem(item) ? '<button class="utility-button edit-published-button" data-detail-action="edit-published">编辑作品</button><button class="utility-button delete-published-button" data-detail-action="delete-published">删除作品</button>' : ''}
       </div>
     </div>`;
   $('#detail-dialog').showModal();
@@ -545,7 +547,7 @@ function downloadSelected() {
 async function deletePublishedItem() {
   const item = state.selected;
   if (!isOwnPublishedItem(item)) return;
-  if (!window.confirm(`确定从创意工坊删除「${item.title}」？\n删除后将不再公开展示，但不会自动卸载玩家已经写入游戏的内容。`)) return;
+  if (!window.confirm(`确定永久删除创意工坊作品「${item.title}」？\n删除作品不会自动卸载玩家已经写入游戏的内容。`)) return;
   try {
     await api(`/items/${encodeURIComponent(item.id)}`, { method: 'DELETE' });
     $('#detail-dialog').close();
@@ -569,16 +571,50 @@ async function toggleLike() {
   } catch (error) { toast(error.message); }
 }
 
-function openPublish() {
-  if (!state.user) { beginLogin().catch((error) => toast(error.message)); return; }
+function resetPublishEditor() {
   state.publishPackage = null;
   state.gameSources = [];
   state.extensionSections = [];
   $('#publish-form').reset();
-  $('#publish-type').value = state.type;
   $('#publish-json').value = '';
+  $('#publish-status').textContent = '';
+  $('#local-source').innerHTML = '';
   $('#local-source-row').hidden = true;
+}
+
+function setPublishEditorMode(item = null) {
+  const editing = !!item?.id;
+  state.editingItemId = editing ? item.id : '';
+  state.editingItemType = editing ? item.itemType : '';
+  $('#publish-type').disabled = editing;
+  $('#publish-eyebrow').textContent = editing ? 'EDIT PUBLISHED ITEM' : 'PUBLISH';
+  $('#publish-dialog-title').textContent = editing ? `编辑${TYPE_LABEL[item.itemType] || '作品'}` : '发布到临江创意工坊';
+  $('#publish-submit').textContent = editing ? '保存修改' : '确认发布';
+}
+
+function openPublish() {
+  if (!state.user) { beginLogin().catch((error) => toast(error.message)); return; }
+  resetPublishEditor();
+  setPublishEditorMode(null);
+  $('#publish-type').value = state.type;
   syncExtensionFields();
+  $('#publish-dialog').showModal();
+}
+
+function openPublishedItemEditor() {
+  const item = state.selected;
+  if (!isOwnPublishedItem(item)) return;
+  resetPublishEditor();
+  setPublishEditorMode(item);
+  const pkg = structuredClone(item.package || {});
+  pkg.itemType = item.itemType;
+  pkg.title = item.title;
+  pkg.summary = item.summary || '';
+  pkg.tags = Array.isArray(item.tags) ? item.tags.slice() : [];
+  pkg.coverUrl = item.coverUrl || '';
+  setPublishPackage(pkg);
+  $('#package-preview').open = item.itemType !== 'extension';
+  $('#detail-dialog').close();
   $('#publish-dialog').showModal();
 }
 
@@ -617,8 +653,9 @@ async function chooseGameSource(index) {
 }
 
 function setPublishPackage(pkg) {
-  state.publishPackage = pkg;
   const type = pkg.itemType || pkg.type || 'streamer';
+  if (state.editingItemId && type !== state.editingItemType) throw new Error(`当前正在编辑${TYPE_LABEL[state.editingItemType]}，请选择同类型作品包`);
+  state.publishPackage = pkg;
   $('#publish-type').value = type;
   $('#publish-title').value = pkg.title || pkg.data?.name || '';
   $('#publish-summary').value = pkg.summary || '';
@@ -665,8 +702,15 @@ function packageFromForm() {
     pkg.coverUrl = $('#publish-cover').value.trim();
     return pkg;
   }
-  const pkg = state.publishPackage ? structuredClone(state.publishPackage) : null;
+  const packageText = $('#publish-json').value.trim();
+  let pkg = state.publishPackage ? structuredClone(state.publishPackage) : null;
+  if (packageText) {
+    try { pkg = JSON.parse(packageText); }
+    catch (error) { throw new Error(`作品包 JSON 格式错误：${error.message}`); }
+  }
   if (!pkg) throw new Error('请先从游戏读取内容或导入作品 JSON');
+  const packageType = pkg.itemType || pkg.type || type;
+  if (packageType !== type) throw new Error(`作品包类型是${TYPE_LABEL[packageType] || packageType}，与当前编辑类型不一致`);
   pkg.itemType = type;
   pkg.title = $('#publish-title').value.trim();
   pkg.summary = $('#publish-summary').value.trim();
@@ -680,10 +724,14 @@ async function submitPublish(event) {
   const output = $('#publish-status');
   try {
     const pkg = packageFromForm();
-    output.textContent = '正在发布……';
-    const data = await api('/items', { method: 'POST', body: pkg });
-    output.textContent = `发布成功：${data.item.title}`;
+    const editingId = state.editingItemId;
+    output.textContent = editingId ? '正在保存修改……' : '正在发布……';
+    const data = await api(editingId ? `/items/${encodeURIComponent(editingId)}` : '/items', { method: editingId ? 'PUT' : 'POST', body: pkg });
+    output.textContent = editingId ? `修改已保存：${data.item.title}` : `发布成功：${data.item.title}`;
     $('#publish-dialog').close();
+    state.editingItemId = '';
+    state.editingItemType = '';
+    $('#publish-type').disabled = false;
     state.type = data.item.itemType;
     syncTabs();
     await loadItems();
@@ -756,6 +804,7 @@ $('#detail-content').addEventListener('click', (event) => {
   }
   if (action === 'install') installSelected();
   if (action === 'download') downloadSelected();
+  if (action === 'edit-published') openPublishedItemEditor();
   if (action === 'like') toggleLike();
   if (action === 'delete-published') deletePublishedItem();
 });
