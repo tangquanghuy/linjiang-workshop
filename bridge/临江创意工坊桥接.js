@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         临江创意工坊桥接
 // @namespace    linjiang.workshop
-// @version      0.1.3
+// @version      0.1.4
 // @description  在酒馆内打开临江创意工坊，并负责主播、城市节点、拓展与本地代币写入
 // @match        */*
 // @grant        none
@@ -11,7 +11,7 @@
   'use strict';
 
   const SCRIPT_KEY = '__linjiangWorkshopBridgeV1';
-  const BRIDGE_VERSION = 'bridge-20260912-manager-close-v1';
+  const BRIDGE_VERSION = 'bridge-20260912-free-city-install-v1';
   if (window[SCRIPT_KEY]) return;
   window[SCRIPT_KEY] = true;
 
@@ -25,7 +25,6 @@
   const END_NAME = '--/Mod结束';
   const START_ORDER = 400;
   const END_ORDER = 500;
-  const CITY_BUILD_COST = 1000000;
   const MAP_REVISION = '20260823-custom-nodes-v1';
 
   const wins = () => {
@@ -260,8 +259,6 @@
     const name = clean(d.name, 30);
     if (!name || !clean(p.plate, 50) || !Array.isArray(p.localPos) || p.localPos.length < 2) throw new Error('城市节点作品包定位信息不完整');
     const context = readMvu();
-    const funds = Number(context.stat.玩家信息?.金钱) || 0;
-    if (funds < CITY_BUILD_COST) throw new Error(`建设需要 ￥${CITY_BUILD_COST.toLocaleString('en-US')}，当前持有 ￥${funds.toLocaleString('en-US')}`);
     context.stat.系统配置 = context.stat.系统配置 && typeof context.stat.系统配置 === 'object' ? context.stat.系统配置 : {};
     context.stat.系统配置.地图 = context.stat.系统配置.地图 && typeof context.stat.系统配置.地图 === 'object' ? context.stat.系统配置.地图 : {};
     context.stat.系统配置.地图.版本 = 1;
@@ -292,9 +289,8 @@
       世界书同步: { 状态: worldbookSynced ? '已同步' : '由地图加载动态注入', 条目UID: null },
     };
     context.stat.系统配置.地图.自建节点 = nodes;
-    context.stat.玩家信息.金钱 = funds - CITY_BUILD_COST;
     saveMvu(context);
-    return { id, name, cost: CITY_BUILD_COST, money: funds - CITY_BUILD_COST };
+    return { id, name, cost: 0, money: Number(context.stat.玩家信息?.金钱) || 0 };
   }
 
   async function installExtension(item) {
